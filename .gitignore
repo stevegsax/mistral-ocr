@@ -165,10 +165,25 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # Ruff stuff:
 .ruff_cache/
 
 # PyPI configuration file
 .pypirc
+
+# This project will generate a lot of JSON and JSONL files that we don't want
+*.jsonl
+*.json
+
+# Ignore images unless forced
+*.jpg
+*.jpeg
+*.png
+*.tiff
+*.gif
+*.ppm
+*.pgm
+*.bmp
+
