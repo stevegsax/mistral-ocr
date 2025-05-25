@@ -30,7 +30,11 @@ Based on the provided specifications in `REQUIREMENTS.md`, the `mistral-ocr` pro
 
 7. **Configuration Management**:
 
-- Implement a **Configuration Management pattern** that adheres to the XDG Base Directory Specification for organizing configuration settings and user data, ensuring a marketable, modular, and clean design.
+    - Implement a **Configuration Management pattern** that adheres to the XDG Base Directory Specification for organizing configuration settings and user data, ensuring a marketable, modular, and clean design.
+
+8. **Functional Core and Imperative Shell**:
+
+    - To maximize our ability to create reliable tests, we plan to employ the **Functional Core and Imperative Shell** pattern, ensuring that business logic is encapsulated in pure functions. This approach will enable us to maintain immutability of data whenever possible, promoting cleaner code and ease of testing. We prioritize testing and code quality over performance to ensure robustness and maintainability.
 
 ### Proposed System Components
 
@@ -61,7 +65,7 @@ Based on the provided specifications in `REQUIREMENTS.md`, the `mistral-ocr` pro
 
 ### Non-Functional Considerations
 
-- **Performance**: Ensure that the file submission and processing is efficient, especially for systems meant to handle large batches of files.
+- **Performance**: While ensuring efficient file submission and processing, we acknowledge that code quality, testing, and maintainability take precedence over performance, shaping our design principles and choices. 
   
 - **Scalability**: Future-proofing the architecture is essential. The design should allow the addition of new features (e.g., additional formats, new processing types) without significant changes to the core.
   
@@ -71,12 +75,7 @@ Based on the provided specifications in `REQUIREMENTS.md`, the `mistral-ocr` pro
 
 ### Conclusion
 
-The architecture for `mistral-ocr` is primarily a client to the Mistral OCR API with several local processing components for batch management, job handling, and results retrieval. Adopting established software patterns will help ensure the system is modular, maintainable, and extendable as new requirements emerge. This analysis sets the foundation for a senior engineer to further develop an implementation design, keeping best practices in mind.
-
-
-
-
-
+The architecture for `mistral-ocr` is primarily a client to the Mistral OCR API with several local processing components for batch management, job handling, and results retrieval. By adopting established software patterns, alongside the **Functional Core and Imperative Shell** approach for clean code and testing, we will ensure the system is modular, maintainable, and extendable as new requirements emerge. This analysis sets the foundation for a senior engineer to further develop an implementation design, keeping best practices in mind.
 
 
 
@@ -88,5 +87,5 @@ The architecture for `mistral-ocr` is primarily a client to the Mistral OCR API 
 <!-- gptel-model: gpt-4o-mini -->
 <!-- gptel--backend-name: "ChatGPT" -->
 <!-- gptel--system-message: "You are an experienced software architect. Review the process as described in file `PROCESS.md`. Your task is to perform a high level architectural analysis. This will be used by a senior engineer to create an implementation design. Wherever possible, you should describe the design using existing software patterns. " -->
-<!-- gptel--bounds: ((response (28 462) (467 809) (814 1054) (1059 1264) (1269 1562) (1567 1823) (1828 2515) (2524 2598) (2607 2873) (2882 3056) (3061 3190) (3195 3347) (3352 3460) (3465 3609) (3614 4904))) -->
+<!-- gptel--bounds: nil -->
 <!-- End: -->
