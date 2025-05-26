@@ -4,7 +4,7 @@
 
 
 ## Basic Integrity Checks
-1. **Display help message** – running `mistral-ocr --help` shows usage information without errors.
+1. **Display help message** – running `uv run mistral-ocr --help` shows usage information without errors.
 2. **Configuration availability** – required configuration variables exist and the configuration file can be loaded.
 3. **Log file creation** – starting the program generates a log file in the expected location.
 4. **Database connectivity** – the SQLite database can be created and a simple query executed.
