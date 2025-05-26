@@ -15,20 +15,30 @@ def main() -> None:
         help="Submit a file or directory for OCR processing"
     )
     
+    parser.add_argument(
+        "--check-job",
+        type=str,
+        help="Check the status of a job by ID"
+    )
+    
     args = parser.parse_args()
     
+    # Import here to avoid circular imports
+    from mistral_ocr.client import MistralOCRClient
+    
+    # Get API key from environment variable
+    api_key = os.environ.get("MISTRAL_API_KEY", "test")
+    client = MistralOCRClient(api_key=api_key)
+    
     if args.submit:
-        # Import here to avoid circular imports
-        from mistral_ocr.client import MistralOCRClient
-        
-        # Get API key from environment variable
-        api_key = os.environ.get("MISTRAL_API_KEY", "test")
-        client = MistralOCRClient(api_key=api_key)
-        
         # Submit the file/directory
         file_path = pathlib.Path(args.submit)
         job_id = client.submit_documents([file_path])
         print(f"Submitted job: {job_id}")
+    elif getattr(args, 'check_job', None):
+        # Check job status
+        status = client.check_job_status(args.check_job)
+        print(f"Job {args.check_job} status: {status}")
 
 
 if __name__ == "__main__":
