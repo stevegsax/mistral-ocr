@@ -23,7 +23,16 @@ class MistralOCRClient:
             
         Returns:
             Job ID for tracking the submission
+            
+        Raises:
+            ValueError: If any file has an unsupported file type
         """
+        # Validate file types
+        supported_extensions = {'.png', '.jpg', '.jpeg', '.pdf'}
+        for file in files:
+            if file.suffix.lower() not in supported_extensions:
+                raise ValueError(f"Unsupported file type: {file.suffix}")
+        
         # For now, return a mock job ID to satisfy the test
         # In a real implementation, this would make an API call
         return "job_123"
