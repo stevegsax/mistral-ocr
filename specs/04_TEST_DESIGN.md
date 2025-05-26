@@ -16,7 +16,9 @@ This document outlines the testing strategy for the `mistral-ocr` client, ensuri
 4. Measure the performance and robustness of the client under varying load conditions.
 
 ### Environment Verification
-- Run `mistral-ocr --help` to confirm the program starts with no errors.
+
+- Activate the virtual environment with `source .venv/bin/activate`
+- Run `uv run mistral-ocr --help` to confirm the program starts with no errors.
 - Ensure required configuration variables and files can be loaded.
 - Verify a log file is created in the expected XDG directory.
 - Confirm the SQLite database can be created or connected and a simple query succeeds.
@@ -26,7 +28,7 @@ This document outlines the testing strategy for the `mistral-ocr` client, ensuri
 #### 1. Unit Testing
 
 - **Purpose**: Verify that individual functions and methods work as expected.
-- **Tools**: Use `pytest` for running unit tests.
+- **Tools**: Use `uv run pytest` for running unit tests.
 - **Coverage**:
   - Test each method in the `MistralOCRClient`, `ConfigurationManager`, `FileSubmissionService`, `JobManagementService`, and `ResultService` classes.
   - Ensure proper response handling, including success and failure cases.
