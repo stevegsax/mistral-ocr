@@ -2,7 +2,7 @@
 
 import pathlib
 import sqlite3
-from typing import Any
+from typing import Any, Optional
 
 
 class Database:
@@ -15,7 +15,7 @@ class Database:
             db_path: Path to the SQLite database file
         """
         self.db_path = db_path
-        self.connection: sqlite3.Connection | None = None
+        self.connection: Optional[sqlite3.Connection] = None
     
     def connect(self) -> None:
         """Connect to the database."""

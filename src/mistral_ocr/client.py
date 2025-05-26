@@ -1,7 +1,7 @@
 """Mistral OCR client for API interactions."""
 
 import pathlib
-from typing import List, Any
+from typing import List, Any, Optional
 
 
 class MistralOCRClient:
@@ -15,7 +15,7 @@ class MistralOCRClient:
         """
         self.api_key = api_key
     
-    def submit_documents(self, files: List[pathlib.Path], recursive: bool = False, document_name: str | None = None, document_uuid: str | None = None) -> Any:
+    def submit_documents(self, files: List[pathlib.Path], recursive: bool = False, document_name: Optional[str] = None, document_uuid: Optional[str] = None) -> Any:
         """Submit documents for OCR processing.
         
         Args:
