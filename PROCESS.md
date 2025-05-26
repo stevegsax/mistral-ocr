@@ -19,6 +19,8 @@ This repository follows a structured workflow. Each stage must be completed in o
 ## 4. Test Design
 - Plan the tests that will verify the implementation.
 - Include positive cases, failure scenarios, and edge conditions.
+- Tests proceed from simplest to most complex
+- Before testing functionality, test program integrity (e.g. run the `--help` command first to ensure the program can be found and starts without errors or warnings, all configuration variables are set, the configuration file can be found, log files are created where they are expected to be, the program is able to create or connect to the database, the program is able to perform queries against test data, etc)
 - **Tests are designed after pseudocode is complete.**
 
 ## 5. Test Case Enumeration
