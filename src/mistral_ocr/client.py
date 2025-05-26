@@ -25,11 +25,14 @@ class MistralOCRClient:
             Job ID for tracking the submission
             
         Raises:
+            FileNotFoundError: If any file does not exist
             ValueError: If any file has an unsupported file type
         """
-        # Validate file types
+        # Validate file existence and types
         supported_extensions = {'.png', '.jpg', '.jpeg', '.pdf'}
         for file in files:
+            if not file.exists():
+                raise FileNotFoundError(f"File not found: {file}")
             if file.suffix.lower() not in supported_extensions:
                 raise ValueError(f"Unsupported file type: {file.suffix}")
         
