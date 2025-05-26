@@ -1,6 +1,7 @@
 """Mistral OCR client for API interactions."""
 
 import pathlib
+import logging
 from typing import List, Any, Optional
 
 
@@ -17,6 +18,19 @@ class MistralOCRClient:
             api_key: Mistral API key for authentication
         """
         self.api_key = api_key
+        
+        # Set up logging to XDG_DATA_HOME or fallback to current directory
+        import os
+        from mistral_ocr.logging import setup_logging
+        
+        xdg_data_home = os.environ.get("XDG_DATA_HOME")
+        if xdg_data_home:
+            log_directory = pathlib.Path(xdg_data_home)
+        else:
+            log_directory = pathlib.Path.cwd()
+        
+        self.log_file = setup_logging(log_directory)
+        self.logger = logging.getLogger(__name__)
     
     def submit_documents(self, files: List[pathlib.Path], recursive: bool = False, document_name: Optional[str] = None, document_uuid: Optional[str] = None, model: Optional[str] = None) -> Any:
         """Submit documents for OCR processing.
@@ -41,7 +55,9 @@ class MistralOCRClient:
         
         for path in files:
             if not path.exists():
-                raise FileNotFoundError(f"File not found: {path}")
+                error_msg = f"File not found: {path}"
+                self.logger.error(error_msg)
+                raise FileNotFoundError(error_msg)
             
             if path.is_dir():
                 if recursive:

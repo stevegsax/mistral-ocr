@@ -302,17 +302,28 @@ def test_command_line_result_retrieval() -> None:
     assert result.returncode == 0
 
 
-@pytest.mark.xfail(reason="Error logging not implemented")
 def test_logging_of_errors(tmp_path: pathlib.Path) -> None:
+    import os
     from mistral_ocr.client import MistralOCRClient  # type: ignore
 
-    log_file = tmp_path / "mistral.log"
-    client = MistralOCRClient(api_key="test")
+    # Set XDG_DATA_HOME to tmp_path so the client creates logs there
+    original_xdg = os.environ.get("XDG_DATA_HOME")
+    os.environ["XDG_DATA_HOME"] = str(tmp_path)
+    
     try:
-        client.submit_documents([pathlib.Path("missing.png")])
-    except FileNotFoundError:
-        pass
-    assert log_file.exists()
+        log_file = tmp_path / "mistral.log"
+        client = MistralOCRClient(api_key="test")
+        try:
+            client.submit_documents([pathlib.Path("missing.png")])
+        except FileNotFoundError:
+            pass
+        assert log_file.exists()
+    finally:
+        # Restore original XDG_DATA_HOME
+        if original_xdg is not None:
+            os.environ["XDG_DATA_HOME"] = original_xdg
+        else:
+            os.environ.pop("XDG_DATA_HOME", None)
 
 
 @pytest.mark.xfail(reason="Batch processing check not implemented")

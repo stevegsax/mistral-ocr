@@ -13,7 +13,10 @@ def setup_logging(log_dir: pathlib.Path) -> pathlib.Path:
     Returns:
         Path to the created log file
     """
-    log_file = log_dir / "mistral_ocr.log"
+    # Ensure the log directory exists
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_file = log_dir / "mistral.log"
     
     # Create the log file
     log_file.touch()
@@ -22,7 +25,8 @@ def setup_logging(log_dir: pathlib.Path) -> pathlib.Path:
     logging.basicConfig(
         filename=str(log_file),
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        force=True  # Force reconfiguration even if logging was already configured
     )
     
     return log_file
