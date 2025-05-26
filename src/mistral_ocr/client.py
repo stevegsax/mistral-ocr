@@ -18,7 +18,7 @@ class MistralOCRClient:
         """
         self.api_key = api_key
     
-    def submit_documents(self, files: List[pathlib.Path], recursive: bool = False, document_name: Optional[str] = None, document_uuid: Optional[str] = None) -> Any:
+    def submit_documents(self, files: List[pathlib.Path], recursive: bool = False, document_name: Optional[str] = None, document_uuid: Optional[str] = None, model: Optional[str] = None) -> Any:
         """Submit documents for OCR processing.
         
         Args:
@@ -26,6 +26,7 @@ class MistralOCRClient:
             recursive: If True, process directories recursively
             document_name: Optional name to associate with the document
             document_uuid: Optional UUID to associate files with an existing document
+            model: Optional custom model to use for OCR processing
             
         Returns:
             Job ID for tracking the submission
