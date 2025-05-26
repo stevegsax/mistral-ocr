@@ -21,6 +21,12 @@ def main() -> None:
         help="Check the status of a job by ID"
     )
     
+    parser.add_argument(
+        "--get-results",
+        type=str,
+        help="Retrieve results for a completed job by ID"
+    )
+    
     args = parser.parse_args()
     
     # Import here to avoid circular imports
@@ -39,6 +45,10 @@ def main() -> None:
         # Check job status
         status = client.check_job_status(args.check_job)
         print(f"Job {args.check_job} status: {status}")
+    elif getattr(args, 'get_results', None):
+        # Get job results
+        results = client.get_results(args.get_results)
+        print(f"Results for job {args.get_results}: {len(results)} items")
 
 
 if __name__ == "__main__":
