@@ -57,3 +57,6 @@ This is a Python CLI tool for submitting OCR batches to the Mistral API. The arc
 - Line length limit: 100 characters
 - Python 3.12+ required
 - NEVER change the tests
+
+## Code Style
+- When creating method signatures, use `Optional` rather than union syntax (`| None`)
