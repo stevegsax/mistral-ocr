@@ -15,11 +15,12 @@ class MistralOCRClient:
         """
         self.api_key = api_key
     
-    def submit_documents(self, files: List[pathlib.Path]) -> Any:
+    def submit_documents(self, files: List[pathlib.Path], recursive: bool = False) -> Any:
         """Submit documents for OCR processing.
         
         Args:
             files: List of file paths or directories to submit for OCR
+            recursive: If True, process directories recursively
             
         Returns:
             Job ID for tracking the submission
@@ -28,7 +29,7 @@ class MistralOCRClient:
             FileNotFoundError: If any file or directory does not exist
             ValueError: If any file has an unsupported file type
         """
-        # Expand directories to their contained files (non-recursive)
+        # Expand directories to their contained files
         actual_files = []
         supported_extensions = {'.png', '.jpg', '.jpeg', '.pdf'}
         
@@ -37,10 +38,16 @@ class MistralOCRClient:
                 raise FileNotFoundError(f"File not found: {path}")
             
             if path.is_dir():
-                # Add all supported files in the directory (non-recursive)
-                for file in path.iterdir():
-                    if file.is_file() and file.suffix.lower() in supported_extensions:
-                        actual_files.append(file)
+                if recursive:
+                    # Add all supported files recursively
+                    for file in path.rglob('*'):
+                        if file.is_file() and file.suffix.lower() in supported_extensions:
+                            actual_files.append(file)
+                else:
+                    # Add all supported files in the directory (non-recursive)
+                    for file in path.iterdir():
+                        if file.is_file() and file.suffix.lower() in supported_extensions:
+                            actual_files.append(file)
             elif path.is_file():
                 if path.suffix.lower() not in supported_extensions:
                     raise ValueError(f"Unsupported file type: {path.suffix}")
