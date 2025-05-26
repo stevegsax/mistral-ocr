@@ -15,6 +15,12 @@ This document outlines the testing strategy for the `mistral-ocr` client, ensuri
 3. Verify the handling of edge cases and error conditions.
 4. Measure the performance and robustness of the client under varying load conditions.
 
+### Environment Verification
+- Run `mistral-ocr --help` to confirm the program starts with no errors.
+- Ensure required configuration variables and files can be loaded.
+- Verify a log file is created in the expected XDG directory.
+- Confirm the SQLite database can be created or connected and a simple query succeeds.
+
 ### Testing Types
 
 #### 1. Unit Testing
