@@ -19,22 +19,32 @@ class MistralOCRClient:
         """Submit documents for OCR processing.
         
         Args:
-            files: List of file paths to submit for OCR
+            files: List of file paths or directories to submit for OCR
             
         Returns:
             Job ID for tracking the submission
             
         Raises:
-            FileNotFoundError: If any file does not exist
+            FileNotFoundError: If any file or directory does not exist
             ValueError: If any file has an unsupported file type
         """
-        # Validate file existence and types
+        # Expand directories to their contained files (non-recursive)
+        actual_files = []
         supported_extensions = {'.png', '.jpg', '.jpeg', '.pdf'}
-        for file in files:
-            if not file.exists():
-                raise FileNotFoundError(f"File not found: {file}")
-            if file.suffix.lower() not in supported_extensions:
-                raise ValueError(f"Unsupported file type: {file.suffix}")
+        
+        for path in files:
+            if not path.exists():
+                raise FileNotFoundError(f"File not found: {path}")
+            
+            if path.is_dir():
+                # Add all supported files in the directory (non-recursive)
+                for file in path.iterdir():
+                    if file.is_file() and file.suffix.lower() in supported_extensions:
+                        actual_files.append(file)
+            elif path.is_file():
+                if path.suffix.lower() not in supported_extensions:
+                    raise ValueError(f"Unsupported file type: {path.suffix}")
+                actual_files.append(path)
         
         # For now, return a mock job ID to satisfy the test
         # In a real implementation, this would make an API call
