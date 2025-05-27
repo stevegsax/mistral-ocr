@@ -54,22 +54,34 @@ class MistralOCRClient:
         else:
             self.client = None  # Mock client
 
-        # Set up logging to XDG_DATA_HOME or fallback to current directory
+        # Set up logging to XDG_DATA_HOME (for logs)
         from mistral_ocr.logging import setup_logging
 
         xdg_data_home = os.environ.get("XDG_DATA_HOME")
         if xdg_data_home:
-            log_directory = pathlib.Path(xdg_data_home)
+            log_directory = pathlib.Path(xdg_data_home) / "mistral-ocr"
         else:
-            log_directory = pathlib.Path.cwd()
+            # Fallback to XDG spec: ~/.local/share/mistral-ocr
+            home = pathlib.Path.home()
+            log_directory = home / ".local" / "share" / "mistral-ocr"
 
         self.log_file = setup_logging(log_directory)
         self.logger = logging.getLogger(__name__)
 
-        # Database for storing job metadata
+        # Database for storing job metadata (XDG_STATE_HOME for persistent state)
         from mistral_ocr.database import Database
 
-        db_path = log_directory / "mistral_ocr.db"
+        xdg_state_home = os.environ.get("XDG_STATE_HOME")
+        if xdg_state_home:
+            db_directory = pathlib.Path(xdg_state_home) / "mistral-ocr"
+        else:
+            # Fallback to XDG spec: ~/.local/state/mistral-ocr
+            home = pathlib.Path.home()
+            db_directory = home / ".local" / "state" / "mistral-ocr"
+        
+        # Ensure database directory exists
+        db_directory.mkdir(parents=True, exist_ok=True)
+        db_path = db_directory / "mistral_ocr.db"
         self.db = Database(db_path)
         self.db.connect()
         self.db.initialize_schema()
@@ -99,6 +111,7 @@ class MistralOCRClient:
             ValueError: If any file has an unsupported file type
         """
         # Expand directories to their contained files
+        self.logger.info(f"Starting document submission for {len(files)} path(s)")
         actual_files = []
         supported_extensions = {".png", ".jpg", ".jpeg", ".pdf"}
 
@@ -109,6 +122,8 @@ class MistralOCRClient:
                 raise FileNotFoundError(error_msg)
 
             if path.is_dir():
+                self.logger.info(f"Scanning directory: {path} (recursive={recursive})")
+                dir_files_before = len(actual_files)
                 if recursive:
                     # Add all supported files recursively
                     for file in path.rglob("*"):
@@ -127,23 +142,38 @@ class MistralOCRClient:
                             and not file.name.startswith(".")
                         ):
                             actual_files.append(file)
+                dir_files_added = len(actual_files) - dir_files_before
+                self.logger.info(f"Found {dir_files_added} supported files in {path}")
             elif path.is_file():
                 if path.suffix.lower() not in supported_extensions:
+                    self.logger.error(f"Unsupported file type: {path.suffix} for file {path}")
                     raise ValueError(f"Unsupported file type: {path.suffix}")
                 actual_files.append(path)
+                self.logger.debug(f"Added file: {path}")
 
         if not actual_files:
+            self.logger.error("No valid files found to process")
             raise ValueError("No valid files found to process")
+        
+        self.logger.info(f"Total files to process: {len(actual_files)}")
 
         # Handle document creation/association
         if document_uuid:
             doc_uuid = document_uuid
+            self.logger.info(f"Using existing document UUID: {doc_uuid}")
         elif document_name:
             # Check if we should append to an existing document or create new one
-            doc_uuid = self.db.get_recent_document_by_name(document_name) or str(uuid.uuid4())
+            existing_uuid = self.db.get_recent_document_by_name(document_name)
+            if existing_uuid:
+                doc_uuid = existing_uuid
+                self.logger.info(f"Appending to existing document '{document_name}' (UUID: {doc_uuid})")
+            else:
+                doc_uuid = str(uuid.uuid4())
+                self.logger.info(f"Creating new document '{document_name}' (UUID: {doc_uuid})")
         else:
             doc_uuid = str(uuid.uuid4())
             document_name = f"Document_{doc_uuid[:8]}"
+            self.logger.info(f"Creating new document '{document_name}' (UUID: {doc_uuid})")
 
         # Store document metadata
         self.db.store_document(doc_uuid, document_name or f"Document_{doc_uuid[:8]}")
@@ -151,10 +181,15 @@ class MistralOCRClient:
         # Batch processing - split into groups of 100 files max
         batches = [actual_files[i : i + 100] for i in range(0, len(actual_files), 100)]
         job_ids = []
-
+        
+        if len(batches) > 1:
+            self.logger.info(f"Splitting into {len(batches)} batches (100 files max per batch)")
+        
         ocr_model = model or "mistral-ocr-latest"
+        self.logger.info(f"Using OCR model: {ocr_model}")
 
-        for batch_files in batches:
+        for batch_idx, batch_files in enumerate(batches, 1):
+            self.logger.info(f"Processing batch {batch_idx}/{len(batches)} with {len(batch_files)} files")
             try:
                 if self.mock_mode:
                     # Mock implementation
@@ -169,17 +204,21 @@ class MistralOCRClient:
                         self.db.store_page(str(file_path), doc_uuid, file_id)
                 else:
                     # Real implementation - create JSONL batch file
+                    self.logger.info(f"Creating batch file for {len(batch_files)} files")
                     batch_file_path = self._create_batch_file(batch_files)
 
                     try:
                         # Upload the batch file
+                        self.logger.info(f"Uploading batch file: {batch_file_path.name}")
                         with open(batch_file_path, "rb") as f:
                             batch_upload = self.client.files.upload(
                                 file={"file_name": batch_file_path.name, "content": f},
                                 purpose="batch",
                             )
+                        self.logger.info(f"Batch file uploaded with ID: {batch_upload.id}")
 
                         # Create batch job
+                        self.logger.info(f"Creating batch job with model: {ocr_model}")
                         batch_job = self.client.batch.jobs.create(
                             input_files=[batch_upload.id],
                             endpoint="/v1/ocr",
@@ -188,6 +227,7 @@ class MistralOCRClient:
                         )
 
                         job_id = batch_job.id
+                        self.logger.info(f"Batch job created with ID: {job_id}")
 
                         # Store page metadata
                         for file_path in batch_files:
@@ -197,18 +237,26 @@ class MistralOCRClient:
                         # Clean up temporary batch file
                         if batch_file_path.exists():
                             batch_file_path.unlink()
+                            self.logger.debug(f"Cleaned up temporary batch file: {batch_file_path.name}")
 
                 job_ids.append(job_id)
 
                 # Store job metadata
                 self.db.store_job(job_id, doc_uuid, "pending", len(batch_files))
+                self.logger.info(f"Stored job metadata for job {job_id} with {len(batch_files)} files")
 
                 self.logger.info(f"Created batch job {job_id} with {len(batch_files)} files")
 
             except Exception as e:
-                error_msg = f"Failed to submit batch: {str(e)}"
+                error_msg = f"Failed to submit batch {batch_idx}/{len(batches)}: {str(e)}"
                 self.logger.error(error_msg)
                 raise RuntimeError(error_msg)
+
+        # Log completion summary
+        if len(job_ids) == 1:
+            self.logger.info(f"Document submission completed successfully. Job ID: {job_ids[0]}")
+        else:
+            self.logger.info(f"Document submission completed successfully. Created {len(job_ids)} batch jobs: {', '.join(job_ids)}")
 
         # Return single job ID if only one batch, otherwise return list
         return job_ids[0] if len(job_ids) == 1 else job_ids
@@ -225,10 +273,13 @@ class MistralOCRClient:
         # Create temporary file for batch processing
         temp_fd, temp_path = tempfile.mkstemp(suffix=".jsonl", prefix="mistral_ocr_batch_")
         batch_file_path = pathlib.Path(temp_path)
+        self.logger.debug(f"Creating batch file: {batch_file_path.name}")
 
         try:
+            successful_entries = 0
             with os.fdopen(temp_fd, "w") as f:
                 for i, file_path in enumerate(file_paths):
+                    self.logger.debug(f"Encoding file {i+1}/{len(file_paths)}: {file_path.name}")
                     data_url = self._encode_file_to_data_url(file_path)
                     if data_url:
                         entry = {
@@ -239,9 +290,13 @@ class MistralOCRClient:
                             },
                         }
                         f.write(json.dumps(entry) + "\n")
+                        successful_entries += 1
                     else:
                         self.logger.warning(f"Failed to encode file: {file_path}")
-        except Exception:
+            
+            self.logger.info(f"Created batch file with {successful_entries}/{len(file_paths)} entries")
+        except Exception as e:
+            self.logger.error(f"Error creating batch file: {str(e)}")
             # Clean up on error
             if batch_file_path.exists():
                 batch_file_path.unlink()
@@ -408,11 +463,14 @@ class MistralOCRClient:
             batch_job = self.client.batch.jobs.get(job_id=job_id)
 
             if not batch_job.output_file:
+                self.logger.info(f"Job {job_id} has no output file")
                 return []
 
             # Download the output file
             output_response = self.client.files.download(file_id=batch_job.output_file)
             output_content = output_response.read().decode("utf-8")
+            
+            self.logger.info(f"Downloaded output file, content length: {len(output_content)}")
 
             # Parse the results (JSONL format from batch API)
             results = []
@@ -423,24 +481,36 @@ class MistralOCRClient:
                         if "response" in result_data and "body" in result_data["response"]:
                             response_body = result_data["response"]["body"]
 
-                            # The OCR API returns the extracted text directly
-                            if "text" in response_body:
+                            # The OCR API returns the extracted text in various formats
+                            text_content = None
+                            markdown_content = None
+                            
+                            # Check for pages format (Mistral OCR API)
+                            if "pages" in response_body and response_body["pages"]:
+                                page = response_body["pages"][0]  # Use first page
+                                if "markdown" in page:
+                                    markdown_content = page["markdown"]
+                                    text_content = page.get("text", markdown_content)
+                                elif "text" in page:
+                                    text_content = page["text"]
+                                    markdown_content = text_content
+                            # Check for direct text/content format
+                            elif "text" in response_body:
                                 text_content = response_body["text"]
                                 markdown_content = response_body.get("markdown", text_content)
                             elif "content" in response_body:
                                 text_content = response_body["content"]
                                 markdown_content = text_content
-                            else:
-                                # Fallback to look for choices format
-                                if "choices" in response_body and response_body["choices"]:
-                                    choice = response_body["choices"][0]
-                                    if "message" in choice and "content" in choice["message"]:
-                                        text_content = choice["message"]["content"]
-                                        markdown_content = text_content
-                                    else:
-                                        continue
-                                else:
-                                    continue
+                            # Fallback to look for choices format
+                            elif "choices" in response_body and response_body["choices"]:
+                                choice = response_body["choices"][0]
+                                if "message" in choice and "content" in choice["message"]:
+                                    text_content = choice["message"]["content"]
+                                    markdown_content = text_content
+                            
+                            # Skip if no content found
+                            if not text_content:
+                                continue
 
                             # Extract file name from custom_id if available
                             file_name = result_data.get("custom_id", "unknown")
@@ -474,9 +544,14 @@ class MistralOCRClient:
         if destination is None:
             xdg_data_home = os.environ.get("XDG_DATA_HOME")
             if xdg_data_home:
-                destination = pathlib.Path(xdg_data_home)
+                destination = pathlib.Path(xdg_data_home) / "mistral-ocr"
             else:
-                destination = pathlib.Path.cwd()
+                # Fallback to ~/.local/share/mistral-ocr (XDG spec)
+                home = pathlib.Path.home()
+                destination = home / ".local" / "share" / "mistral-ocr"
+            
+            # Ensure destination directory exists
+            destination.mkdir(parents=True, exist_ok=True)
 
         if self.mock_mode:
             # Mock implementation for testing
@@ -525,3 +600,74 @@ class MistralOCRClient:
             # Still create the directory for test compatibility
             job_dir.mkdir(parents=True, exist_ok=True)
             raise RuntimeError(error_msg)
+
+    def download_document_results(self, document_identifier: str, destination: Optional[pathlib.Path] = None) -> None:
+        """Download results for all jobs associated with a document.
+
+        Args:
+            document_identifier: Document name or UUID to download results for
+            destination: The directory to download results to. If None, uses XDG_DATA_HOME
+        """
+        self.logger.info(f"Starting download for document: {document_identifier}")
+        
+        if destination is None:
+            xdg_data_home = os.environ.get("XDG_DATA_HOME")
+            if xdg_data_home:
+                destination = pathlib.Path(xdg_data_home) / "mistral-ocr"
+            else:
+                # Fallback to ~/.local/share/mistral-ocr (XDG spec)
+                home = pathlib.Path.home()
+                destination = home / ".local" / "share" / "mistral-ocr"
+            
+            # Ensure destination directory exists
+            destination.mkdir(parents=True, exist_ok=True)
+
+        # Get all jobs for this document (by name or UUID)
+        job_ids = self.db.get_jobs_by_document_identifier(document_identifier)
+        
+        if not job_ids:
+            error_msg = f"No jobs found for document: {document_identifier}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        self.logger.info(f"Found {len(job_ids)} job(s) for document {document_identifier}")
+        
+        completed_jobs = []
+        failed_jobs = []
+        total_results = 0
+
+        for job_id in job_ids:
+            try:
+                self.logger.info(f"Processing job {job_id}")
+                
+                # Check if job is completed
+                status = self.check_job_status(job_id)
+                if status.upper() not in ["SUCCESS", "COMPLETED", "SUCCEEDED"]:
+                    self.logger.warning(f"Job {job_id} is not completed (status: {status}), skipping")
+                    failed_jobs.append((job_id, f"Not completed (status: {status})"))
+                    continue
+
+                # Download results for this job
+                self.download_results(job_id, destination)
+                completed_jobs.append(job_id)
+                
+                # Count results for logging
+                results = self.get_results(job_id)
+                total_results += len(results)
+                
+            except Exception as e:
+                error_msg = f"Failed to process job {job_id}: {str(e)}"
+                self.logger.error(error_msg)
+                failed_jobs.append((job_id, str(e)))
+
+        # Log summary
+        if completed_jobs:
+            self.logger.info(f"Successfully downloaded {total_results} results from {len(completed_jobs)} job(s)")
+        
+        if failed_jobs:
+            self.logger.warning(f"Failed to download from {len(failed_jobs)} job(s):")
+            for job_id, error in failed_jobs:
+                self.logger.warning(f"  {job_id}: {error}")
+        
+        if not completed_jobs:
+            raise RuntimeError(f"No results could be downloaded for document {document_identifier}")

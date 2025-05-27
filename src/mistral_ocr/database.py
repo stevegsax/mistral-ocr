@@ -256,6 +256,46 @@ class Database:
         result = cursor.fetchone()
         return (result[0], result[1]) if result else None
 
+    def get_jobs_by_document_identifier(self, identifier: str) -> List[str]:
+        """Get all job IDs for a document by name or UUID.
+
+        Args:
+            identifier: Document name or UUID
+
+        Returns:
+            List of job IDs
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected")
+
+        cursor = self.connection.cursor()
+        
+        # First try to find by UUID
+        cursor.execute(
+            """
+            SELECT j.job_id 
+            FROM jobs j 
+            WHERE j.document_uuid = ?
+        """,
+            (identifier,),
+        )
+        results = cursor.fetchall()
+        
+        # If no results by UUID, try by name
+        if not results:
+            cursor.execute(
+                """
+                SELECT j.job_id 
+                FROM jobs j 
+                JOIN documents d ON j.document_uuid = d.uuid 
+                WHERE d.name = ?
+            """,
+                (identifier,),
+            )
+            results = cursor.fetchall()
+
+        return [row[0] for row in results]
+
     def close(self) -> None:
         """Close the database connection."""
         if self.connection:

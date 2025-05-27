@@ -264,7 +264,7 @@ class TestAdvancedOptions:
         assert "job" in result.stdout.lower() or "results" in result.stdout.lower()
 
     def test_logging_of_errors(self, xdg_data_home: pathlib.Path, client: MistralOCRClient) -> None:
-        log_file = xdg_data_home / "mistral.log"
+        log_file = xdg_data_home / "mistral-ocr" / "mistral.log"
         with pytest.raises(FileNotFoundError):
             client.submit_documents([pathlib.Path("missing.png")])
         assert log_file.exists()

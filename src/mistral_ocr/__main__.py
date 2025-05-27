@@ -24,6 +24,9 @@ def main() -> None:
     parser.add_argument(
         "--download-results", type=str, help="Download results for a completed job by ID"
     )
+    parser.add_argument(
+        "--download-document", type=str, help="Download all results for a document by name or UUID"
+    )
     parser.add_argument("--download-to", type=str, help="Specify download destination directory")
 
     args = parser.parse_args()
@@ -105,6 +108,15 @@ def main() -> None:
 
             client.download_results(args.download_results, destination)
             print(f"Downloaded results for job {args.download_results}")
+
+        elif args.download_document:
+            # Download all results for a document
+            destination = None
+            if args.download_to:
+                destination = pathlib.Path(args.download_to)
+
+            client.download_document_results(args.download_document, destination)
+            print(f"Downloaded all results for document {args.download_document}")
 
         else:
             parser.print_help()
