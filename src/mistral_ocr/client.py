@@ -11,16 +11,11 @@ import uuid
 from typing import List, Optional, Union
 
 from mistralai import Mistral
-from pydantic import BaseModel
 
-
-class OCRResult(BaseModel):
-    """OCR result from the Mistral API."""
-
-    text: str
-    markdown: str
-    file_name: str
-    job_id: str
+from .files import FileCollector
+from .models import OCRResult
+from .parsing import OCRResultParser
+from .paths import XDGPaths
 
 
 class MistralOCRClient:
@@ -54,37 +49,68 @@ class MistralOCRClient:
         else:
             self.client = None  # Mock client
 
-        # Set up logging to XDG_DATA_HOME (for logs)
+        # Initialize logging and utilities
+        self._setup_logging()
+        self._setup_database()
+        self._setup_utilities()
+
+    def _setup_logging(self) -> None:
+        """Set up application logging."""
         from mistral_ocr.logging import setup_logging
-
-        xdg_data_home = os.environ.get("XDG_DATA_HOME")
-        if xdg_data_home:
-            log_directory = pathlib.Path(xdg_data_home) / "mistral-ocr"
-        else:
-            # Fallback to XDG spec: ~/.local/share/mistral-ocr
-            home = pathlib.Path.home()
-            log_directory = home / ".local" / "share" / "mistral-ocr"
-
+        
+        log_directory = XDGPaths.get_data_dir()
         self.log_file = setup_logging(log_directory)
         self.logger = logging.getLogger(__name__)
 
-        # Database for storing job metadata (XDG_STATE_HOME for persistent state)
+    def _setup_database(self) -> None:
+        """Set up database connection."""
         from mistral_ocr.database import Database
-
-        xdg_state_home = os.environ.get("XDG_STATE_HOME")
-        if xdg_state_home:
-            db_directory = pathlib.Path(xdg_state_home) / "mistral-ocr"
-        else:
-            # Fallback to XDG spec: ~/.local/state/mistral-ocr
-            home = pathlib.Path.home()
-            db_directory = home / ".local" / "state" / "mistral-ocr"
         
-        # Ensure database directory exists
-        db_directory.mkdir(parents=True, exist_ok=True)
-        db_path = db_directory / "mistral_ocr.db"
+        db_path = XDGPaths.get_database_path()
         self.db = Database(db_path)
         self.db.connect()
         self.db.initialize_schema()
+
+    def _setup_utilities(self) -> None:
+        """Set up utility classes."""
+        self.file_collector = FileCollector(self.logger)
+        self.result_parser = OCRResultParser(self.logger)
+
+    def _resolve_document(self, document_name: Optional[str], document_uuid: Optional[str]) -> tuple[str, str]:
+        """Resolve document UUID and name for job association.
+        
+        Args:
+            document_name: Optional document name
+            document_uuid: Optional document UUID
+            
+        Returns:
+            Tuple of (document_uuid, document_name)
+        """
+        if document_uuid:
+            self.logger.info(f"Using existing document UUID: {document_uuid}")
+            # Use existing UUID, generate name if not provided
+            resolved_name = document_name or f"Document_{document_uuid[:8]}"
+            self.db.store_document(document_uuid, resolved_name)
+            return document_uuid, resolved_name
+        
+        if document_name:
+            # Check if we should append to an existing document or create new one
+            existing_uuid = self.db.get_recent_document_by_name(document_name)
+            if existing_uuid:
+                self.logger.info(f"Appending to existing document '{document_name}' (UUID: {existing_uuid})")
+                return existing_uuid, document_name
+            else:
+                new_uuid = str(uuid.uuid4())
+                self.logger.info(f"Creating new document '{document_name}' (UUID: {new_uuid})")
+                self.db.store_document(new_uuid, document_name)
+                return new_uuid, document_name
+        
+        # Generate both UUID and name
+        new_uuid = str(uuid.uuid4())
+        generated_name = f"Document_{new_uuid[:8]}"
+        self.logger.info(f"Creating new document '{generated_name}' (UUID: {new_uuid})")
+        self.db.store_document(new_uuid, generated_name)
+        return new_uuid, generated_name
 
     def submit_documents(
         self,
@@ -110,73 +136,11 @@ class MistralOCRClient:
             FileNotFoundError: If any file or directory does not exist
             ValueError: If any file has an unsupported file type
         """
-        # Expand directories to their contained files
-        self.logger.info(f"Starting document submission for {len(files)} path(s)")
-        actual_files = []
-        supported_extensions = {".png", ".jpg", ".jpeg", ".pdf"}
-
-        for path in files:
-            if not path.exists():
-                error_msg = f"File not found: {path}"
-                self.logger.error(error_msg)
-                raise FileNotFoundError(error_msg)
-
-            if path.is_dir():
-                self.logger.info(f"Scanning directory: {path} (recursive={recursive})")
-                dir_files_before = len(actual_files)
-                if recursive:
-                    # Add all supported files recursively
-                    for file in path.rglob("*"):
-                        if (
-                            file.is_file()
-                            and file.suffix.lower() in supported_extensions
-                            and not file.name.startswith(".")
-                        ):
-                            actual_files.append(file)
-                else:
-                    # Add all supported files in the directory (non-recursive)
-                    for file in path.iterdir():
-                        if (
-                            file.is_file()
-                            and file.suffix.lower() in supported_extensions
-                            and not file.name.startswith(".")
-                        ):
-                            actual_files.append(file)
-                dir_files_added = len(actual_files) - dir_files_before
-                self.logger.info(f"Found {dir_files_added} supported files in {path}")
-            elif path.is_file():
-                if path.suffix.lower() not in supported_extensions:
-                    self.logger.error(f"Unsupported file type: {path.suffix} for file {path}")
-                    raise ValueError(f"Unsupported file type: {path.suffix}")
-                actual_files.append(path)
-                self.logger.debug(f"Added file: {path}")
-
-        if not actual_files:
-            self.logger.error("No valid files found to process")
-            raise ValueError("No valid files found to process")
-        
-        self.logger.info(f"Total files to process: {len(actual_files)}")
+        # Collect and validate files
+        actual_files = self.file_collector.collect_files(files, recursive)
 
         # Handle document creation/association
-        if document_uuid:
-            doc_uuid = document_uuid
-            self.logger.info(f"Using existing document UUID: {doc_uuid}")
-        elif document_name:
-            # Check if we should append to an existing document or create new one
-            existing_uuid = self.db.get_recent_document_by_name(document_name)
-            if existing_uuid:
-                doc_uuid = existing_uuid
-                self.logger.info(f"Appending to existing document '{document_name}' (UUID: {doc_uuid})")
-            else:
-                doc_uuid = str(uuid.uuid4())
-                self.logger.info(f"Creating new document '{document_name}' (UUID: {doc_uuid})")
-        else:
-            doc_uuid = str(uuid.uuid4())
-            document_name = f"Document_{doc_uuid[:8]}"
-            self.logger.info(f"Creating new document '{document_name}' (UUID: {doc_uuid})")
-
-        # Store document metadata
-        self.db.store_document(doc_uuid, document_name or f"Document_{doc_uuid[:8]}")
+        doc_uuid, resolved_document_name = self._resolve_document(document_name, document_uuid)
 
         # Batch processing - split into groups of 100 files max
         batches = [actual_files[i : i + 100] for i in range(0, len(actual_files), 100)]
@@ -470,64 +434,8 @@ class MistralOCRClient:
             output_response = self.client.files.download(file_id=batch_job.output_file)
             output_content = output_response.read().decode("utf-8")
             
-            self.logger.info(f"Downloaded output file, content length: {len(output_content)}")
-
-            # Parse the results (JSONL format from batch API)
-            results = []
-            for line in output_content.strip().split("\n"):
-                if line.strip():
-                    try:
-                        result_data = json.loads(line)
-                        if "response" in result_data and "body" in result_data["response"]:
-                            response_body = result_data["response"]["body"]
-
-                            # The OCR API returns the extracted text in various formats
-                            text_content = None
-                            markdown_content = None
-                            
-                            # Check for pages format (Mistral OCR API)
-                            if "pages" in response_body and response_body["pages"]:
-                                page = response_body["pages"][0]  # Use first page
-                                if "markdown" in page:
-                                    markdown_content = page["markdown"]
-                                    text_content = page.get("text", markdown_content)
-                                elif "text" in page:
-                                    text_content = page["text"]
-                                    markdown_content = text_content
-                            # Check for direct text/content format
-                            elif "text" in response_body:
-                                text_content = response_body["text"]
-                                markdown_content = response_body.get("markdown", text_content)
-                            elif "content" in response_body:
-                                text_content = response_body["content"]
-                                markdown_content = text_content
-                            # Fallback to look for choices format
-                            elif "choices" in response_body and response_body["choices"]:
-                                choice = response_body["choices"][0]
-                                if "message" in choice and "content" in choice["message"]:
-                                    text_content = choice["message"]["content"]
-                                    markdown_content = text_content
-                            
-                            # Skip if no content found
-                            if not text_content:
-                                continue
-
-                            # Extract file name from custom_id if available
-                            file_name = result_data.get("custom_id", "unknown")
-
-                            results.append(
-                                OCRResult(
-                                    text=text_content,
-                                    markdown=markdown_content,
-                                    file_name=file_name,
-                                    job_id=job_id,
-                                )
-                            )
-                    except json.JSONDecodeError:
-                        self.logger.warning(f"Failed to parse result line: {line}")
-                        continue
-
-            return results
+            # Parse the results using the result parser
+            return self.result_parser.parse_batch_output(output_content, job_id)
 
         except Exception as e:
             error_msg = f"Failed to retrieve results for job {job_id}: {str(e)}"
@@ -541,17 +449,7 @@ class MistralOCRClient:
             job_id: The job ID to download results for
             destination: The directory to download results to. If None, uses XDG_DATA_HOME
         """
-        if destination is None:
-            xdg_data_home = os.environ.get("XDG_DATA_HOME")
-            if xdg_data_home:
-                destination = pathlib.Path(xdg_data_home) / "mistral-ocr"
-            else:
-                # Fallback to ~/.local/share/mistral-ocr (XDG spec)
-                home = pathlib.Path.home()
-                destination = home / ".local" / "share" / "mistral-ocr"
-            
-            # Ensure destination directory exists
-            destination.mkdir(parents=True, exist_ok=True)
+        destination = XDGPaths.resolve_download_destination(destination)
 
         if self.mock_mode:
             # Mock implementation for testing
@@ -610,17 +508,7 @@ class MistralOCRClient:
         """
         self.logger.info(f"Starting download for document: {document_identifier}")
         
-        if destination is None:
-            xdg_data_home = os.environ.get("XDG_DATA_HOME")
-            if xdg_data_home:
-                destination = pathlib.Path(xdg_data_home) / "mistral-ocr"
-            else:
-                # Fallback to ~/.local/share/mistral-ocr (XDG spec)
-                home = pathlib.Path.home()
-                destination = home / ".local" / "share" / "mistral-ocr"
-            
-            # Ensure destination directory exists
-            destination.mkdir(parents=True, exist_ok=True)
+        destination = XDGPaths.resolve_download_destination(destination)
 
         # Get all jobs for this document (by name or UUID)
         job_ids = self.db.get_jobs_by_document_identifier(document_identifier)
