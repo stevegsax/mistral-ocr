@@ -1,81 +1,125 @@
 # Development Process
 
-> This repository follows a structured workflow. Each stage must be completed in order before moving to the next one. The intent is to ensure that all requirements are reflected in the architecture, that comprehensive tests are created, and that the final product accurately represents the design.
+> This repository follows an iterative Test-Driven Development (TDD) workflow. The intent is to ensure high-quality, tested software through short feedback loops, continuous validation, and incremental delivery of working features.
 
-## Context Switching and Blocked Tasks
+## Core Principles
 
-- An agent should operate in only one of these contexts at a time.
-- If a request is made to perform a task before its prerequisites are satisfied, mark the task as **blocked** and halt work.
-- Move from one phase to another only when explicitly directed by the user.
+- **Test-Driven Development**: Write failing tests first, then implement to make them pass
+- **Short Feedback Loops**: Validate assumptions quickly through working code
+- **Continuous Integration**: Run tests on every change to maintain quality
+- **Incremental Value**: Deliver working features in small, valuable chunks
+- **Adaptive Planning**: Adjust course based on implementation learnings
 
-## Steps
+## Feature Development Cycle
 
-### 1. Requirement Analysis
+Each user story or feature follows this iterative cycle:
 
-- Review current requirements analysis in file `specs/01_REQUIREMENTS.md`. Create this file if it does not already exist. 
-- Ask clarifying questions if necessary.
-- Capture the desired functionality and goals.
-- Document assumptions, constraints, and open questions.
+### 1. Feature Discovery
 
-### 2. Update the TODO List
+**Goal**: Break down requirements into small, testable increments
 
-- Carefully review the current requirements and the set of tasks defined in 'specs/02_TODO.md'. Create this file if it does not already exist.
-- Enumerate the tasks required to build the featues described in the product document.
-    - Each task should be numbered (zero padded to three digits), have a completion checkbox, a status value, and a description. Statuses will be one of "NOT_STARTED", "MOCKUP", "ERROR", "DONE" as described below.
-        - For example: `023. - [ ] NOT_STARTED Logging output should be saved to XDG_STATUS_DIR`. 
-- List everything that will be built, starting with most basic and proceeding to most complex.
-- Based on the current status of the program and tests, mark each requirement as:
-    - "NOT_STARTED" if this feature 
-    - "MOCKUP" if this feature has only been designed to the mockup test stage.
-    - "ERROR" if the feature has tests but the tests fail.
-    - "DONE" if this feature has been fully implemented and all tests pass.
-- Merge requirement analysis into file `specs/01_REQUIREMENTS.md`. Create this file if it does not already exist.
+- Review `specs/01_REQUIREMENTS.md` to identify the next user story
+- Break the story into tasks completable in 1-2 days maximum
+- Define clear acceptance criteria as executable behaviors
+- Update `specs/02_TODO.md` with specific, testable tasks
+- Each task should have: ID, status (NOT_STARTED/IN_PROGRESS/DONE), and description
 
-### 3. Architectural Analysis
+**Quality Gate**: Story is small enough to complete in one cycle
 
-- Think hard about the requirement specifications, the current state of the programm, and any new pseudocode that has been created since the last architectural analysis was performed.
-- Outline the high‑level architecture for the solution.
-- Identify opportunities to clarify and simplify the architecture, following industry best practices.
-- Ask clarifying questions if necessary.
-- Identify components, data flow, and interfaces.
-- Merge architecture analysis into file `specs/03_ARCHIECTURE.md`. Create this file if it does not already exist.
-- **Always design the architecture before writing any pseudocode.**
+### 2. Test-First Design
 
-### 4. Implementation Design and Pseudocode
+**Goal**: Define expected behavior through failing tests
 
-- Think hard about the requirement specifications, the current state of the program, and the architectural analysis.
-- Think hard about opportunities to clarify and simplify the implementation, following industry best practices.
-- Ask clarifying questions if necessary.
-- Write pseudocode describing the main logic without committing to exact syntax.
-- Include comments discussing the intent of the program and reasons for the particular design decisions that were made. Comments should focus on what each fragment is intended to accomplish.
-- Use this step to reason about potential pitfalls and edge cases.
-- Merge the implementation design into file `specs/04_PSEUDOCODE.md`. Create this file if it does not already exist.
-- **Pseudocode comes only after the architecture is defined.**
+- Write the simplest failing test that describes the desired behavior
+- Start with basic integration tests (CLI behavior, file operations)
+- Use mocks/stubs for external dependencies (Mistral API)
+- Let tests drive API and interface design decisions
+- Run tests to confirm they fail for the right reasons
 
-### 5. Test Case Enumeration
+**Quality Gate**: Tests clearly define the expected behavior and fail appropriately
 
-- Think hard about what to test in the implementation design, and how to test it.
-- List everything should be tested in order to ensure implementation correctness, starting with most basic and proceeding to most complex.
-- Organize test cases in order of increasing complexity and dependency.
-- Test for basic integrity first (e.g. run the `--help` command first to ensure the program can be found and starts without errors or warnings, all configuration variables are set, the configuration file can be found, log files are created where they are expected to be, the program is able to create or connect to the database, the program is able to perform queries against test data, etc).
-- Merge the enumerated tests into file `specs/05_TEST_CASE_ENUMERATION.md`. Create this file if it does not already exist.
-- **Tests are enumerated only after pseudocode is complete.**
+### 3. Minimal Implementation
 
-### 6. Design Tests 
+**Goal**: Make tests pass with the simplest possible code
 
-- Think hard about the test cases enumerated in the previous step.
-- Think hard about planning the tests that will verify the implementation.
-- Include positive cases, failure scenarios, and edge conditions.
-- Tests proceed from simplest to most complex.
-- Design mockup fixtures to stand in for any remote resources (for example: remote APIs). Database operations should not be mocked up. 
-- Merge the test design into file `specs/06_TEST_DESIGN.md`. Create this file if it does not already exist. Note which tests use mockups and which are fully implemented.
-- **Tests are designed only after test cases are enumerated**
+- Write just enough code to make the failing test pass
+- Focus on working software over perfect design
+- Implement incrementally: CLI → core logic → external integrations
+- Refactor continuously while keeping tests green
+- Add error handling and edge cases as needed
 
-### 6. Mockup Test Implementation
+**Quality Gate**: All tests pass and code meets basic quality standards
 
-- Build the test code based on the enumerated test cases, using mockups for all external data sources.
-- Implement tests in the order they were listed, from basic to complex.
-- Merge the test into file `specs/07_TEST_IMPLEMENTATION.md`. Create this file if it does not already exist. Note which tests use mockups and which are fully implemented.
-- **Mockup tests are implemented after test cases are enumerated.**
+### 4. Integration & Validation
 
+**Goal**: Ensure the feature works in the complete system
 
+- Run full test suite: `pytest`
+- Check code quality: `ruff check` and `ruff format`
+- Verify type safety: `mypy src/`
+- Test CLI manually for user experience
+- Update documentation if interfaces changed
+
+**Quality Gate**: All quality checks pass and feature works end-to-end
+
+### 5. Planning Next Iteration
+
+**Goal**: Learn and adapt for the next cycle
+
+- Mark completed tasks as DONE in `specs/02_TODO.md`
+- Update architectural docs (`specs/03_ARCHITECTURE.md`) if design evolved
+- Document any new insights or changed assumptions
+- Plan the next smallest valuable increment
+- Identify dependencies or blockers for upcoming work
+
+**Quality Gate**: Clear plan for next iteration with lessons learned captured
+
+## Documentation Strategy
+
+### Living Documentation
+- Update specs to reflect actual implementation, not planned implementation
+- Keep architecture docs current with real system design
+- Document design decisions and their rationale
+
+### Spec Files Organization
+- `specs/01_REQUIREMENTS.md`: User stories and acceptance criteria
+- `specs/02_TODO.md`: Current task backlog with status tracking
+- `specs/03_ARCHITECTURE.md`: High-level system design (updated as it evolves)
+- `specs/04_PSEUDOCODE.md`: Implementation sketches (optional, for complex algorithms)
+- `specs/05_TEST_CASE_ENUMERATION.md`: Comprehensive test scenarios
+- `specs/06_TEST_DESIGN.md`: Test implementation strategy
+- `specs/07_TEST_IMPLEMENTATION.md`: Actual test code and results
+
+## Context Switching Rules
+
+- **Single Feature Focus**: Work on one user story at a time
+- **Complete Cycles**: Finish the entire TDD cycle before switching features
+- **Blocked Tasks**: If prerequisites are missing, mark task as blocked and work on unblocking
+- **Quality Gates**: Don't proceed to next phase until current quality gate is met
+
+## Continuous Quality Practices
+
+### Test Automation
+- Run `pytest` on every code change
+- Maintain test coverage for all core functionality
+- Use TDD red-green-refactor cycle religiously
+
+### Code Quality
+- Apply `ruff format` before every commit
+- Fix all `ruff check` warnings
+- Resolve all `mypy` type errors
+- Follow project coding standards
+
+### Integration Testing
+- Test CLI commands end-to-end
+- Verify file operations and database interactions
+- Mock external API calls but test integration points
+
+## Handling External Dependencies
+
+- **Mistral API**: Mock for unit tests, use test environment for integration
+- **File System**: Use temporary directories for test isolation
+- **Database**: Use in-memory SQLite for fast test execution
+- **Configuration**: Override with test values using environment variables
+
+This process ensures that every feature is thoroughly tested, properly integrated, and delivers real value before moving to the next increment.
