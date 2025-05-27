@@ -718,6 +718,8 @@ class MistralOCRClient:
                 "job_pending",
                 "job_running",
                 "job123",  # Simple test IDs
+                "real-",  # Test jobs with realistic prefixes
+                "abc123-",  # Test jobs with alphanumeric prefixes
             ]
 
             # Check if job ID matches any test pattern

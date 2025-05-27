@@ -386,8 +386,8 @@ class TestJobStatusListing:
         client.db.store_job("test_job_example", test_doc_uuid, "pending", 1)
         client.db.store_job("job123", test_doc_uuid, "completed", 1)
         
-        # Add real job (should be shown)
-        client.db.store_job("real-job-uuid-12345", real_doc_uuid, "SUCCESS", 1)
+        # Add real job (should be shown) - use UUID format like real Mistral jobs
+        client.db.store_job("12345678-1234-5678-9abc-123456789abc", real_doc_uuid, "SUCCESS", 1)
         
         # Mock check_job_status to avoid actual API calls
         def mock_check_status(job_id):
@@ -404,7 +404,7 @@ class TestJobStatusListing:
         assert "job123" not in job_ids
         
         # Real job should be included
-        assert "real-job-uuid-12345" in job_ids
+        assert "12345678-1234-5678-9abc-123456789abc" in job_ids
 
     def test_list_jobs_shows_test_jobs_in_mock_mode(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
         """Test that test jobs are shown in mock mode for testing purposes."""
