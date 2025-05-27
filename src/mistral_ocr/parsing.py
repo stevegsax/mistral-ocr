@@ -1,8 +1,9 @@
 """OCR result parsing utilities."""
 
 import json
-import logging
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 from .models import OCRResult
 
@@ -10,7 +11,7 @@ from .models import OCRResult
 class OCRResultParser:
     """Utility class for parsing OCR results from Mistral API responses."""
 
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: structlog.BoundLogger):
         """Initialize the parser.
 
         Args:

@@ -1,4 +1,3 @@
-import logging
 import os
 import pathlib
 import subprocess
@@ -8,7 +7,7 @@ import pytest
 from mistral_ocr.client import MistralOCRClient
 from mistral_ocr.config import ConfigurationManager
 from mistral_ocr.database import Database
-from mistral_ocr.logging import setup_logging
+from mistral_ocr.logging import get_logger, setup_logging
 
 
 # Helper function to run the CLI
@@ -100,7 +99,8 @@ class TestBasicIntegrity:
         log_dir = tmp_path / "logs"
         log_dir.mkdir()
         log_file = setup_logging(log_dir)
-        logging.getLogger("test").error("test message")
+        logger = get_logger("test")
+        logger.error("test message")
         assert log_file.exists()
         assert "test message" in log_file.read_text()
 
@@ -297,155 +297,173 @@ class TestJobStatusListing:
             # Basic table structure check
             assert any("Job ID" in line for line in lines)
 
-    def test_list_jobs_refreshes_from_api(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+    def test_list_jobs_refreshes_from_api(
+        self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
+    ) -> None:
         """Test that list jobs refreshes status from Mistral API in real mode."""
         # Create a client that uses the same temporary data directory as the CLI
         from mistral_ocr.client import MistralOCRClient
-        
+
         # Create client in real mode (not test mode)
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False  # Force real mode for this test
-        
+
         # Create a realistic job with stale status in database
         test_doc_uuid = "real-doc-uuid-refresh"
         client.db.store_document(test_doc_uuid, "Real Document")
-        client.db.store_job("abc123-real-job-id", test_doc_uuid, "running", 1)  # Use realistic job ID
-        
+        client.db.store_job(
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890", test_doc_uuid, "running", 1
+        )  # Use UUID-like production job ID
+
         # Mock the check_job_status method to return updated status
         original_method = client.check_job_status
+
         def mock_check_status(job_id):
-            if job_id == "abc123-real-job-id":
+            if job_id == "a1b2c3d4-e5f6-7890-abcd-ef1234567890":
                 return "completed"  # Simulate API returning updated status
             return original_method(job_id)
-        
+
         client.check_job_status = mock_check_status
-        
+
         # Call list_all_jobs - should refresh from API
         jobs = client.list_all_jobs()
-        
-        # Verify the job status was updated
-        refresh_job = next((job for job in jobs if job['id'] == 'abc123-real-job-id'), None)
-        assert refresh_job is not None
-        assert refresh_job['status'] == 'completed'
 
-    def test_list_jobs_skips_final_and_pending_jobs(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        # Verify the job status was updated
+        refresh_job = next(
+            (job for job in jobs if job["id"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"), None
+        )
+        assert refresh_job is not None
+        assert refresh_job["status"] == "completed"
+
+    def test_list_jobs_skips_final_and_pending_jobs(
+        self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
+    ) -> None:
         """Test that list jobs skips API calls for SUCCESS and pending jobs."""
         # Create a client that uses the same temporary data directory as the CLI
         from mistral_ocr.client import MistralOCRClient
-        
+
         # Create client in real mode (not test mode)
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False  # Force real mode for this test
-        
+
         # Create realistic jobs with different statuses
         real_doc_uuid = "real-doc-uuid-skip"
         client.db.store_document(real_doc_uuid, "Real Document")
-        client.db.store_job("real-success-12345", real_doc_uuid, "SUCCESS", 1)
-        client.db.store_job("real-pending-67890", real_doc_uuid, "pending", 1)  
-        client.db.store_job("real-running-abcde", real_doc_uuid, "running", 1)
-        
+        client.db.store_job("b2c3d4e5-f6a7-8901-bcde-f23456789012", real_doc_uuid, "SUCCESS", 1)
+        client.db.store_job("c3d4e5f6-a7b8-9012-cdef-345678901234", real_doc_uuid, "pending", 1)
+        client.db.store_job("d4e5f6a7-b8c9-0123-defa-456789012345", real_doc_uuid, "running", 1)
+
         # Mock the check_job_status method to track which jobs are checked
         api_calls = []
         original_method = client.check_job_status
+
         def mock_check_status(job_id):
             api_calls.append(job_id)
             return original_method(job_id)
-        
+
         client.check_job_status = mock_check_status
-        
+
         # Call list_all_jobs - should only refresh running job
         jobs = client.list_all_jobs()
-        
-        # Verify only the running job was checked via API
-        assert "real-running-abcde" in api_calls
-        assert "real-success-12345" not in api_calls  # Should be skipped
-        assert "real-pending-67890" not in api_calls  # Should be skipped
-        
-        # Verify all jobs are still returned
-        job_ids = {job['id'] for job in jobs}
-        assert "real-success-12345" in job_ids
-        assert "real-pending-67890" in job_ids
-        assert "real-running-abcde" in job_ids
 
-    def test_list_jobs_hides_test_jobs_in_real_mode(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        # Verify only the running job was checked via API
+        assert "d4e5f6a7-b8c9-0123-defa-456789012345" in api_calls
+        assert "b2c3d4e5-f6a7-8901-bcde-f23456789012" not in api_calls  # Should be skipped
+        assert "c3d4e5f6-a7b8-9012-cdef-345678901234" not in api_calls  # Should be skipped
+
+        # Verify all jobs are still returned
+        job_ids = {job["id"] for job in jobs}
+        assert "b2c3d4e5-f6a7-8901-bcde-f23456789012" in job_ids
+        assert "c3d4e5f6-a7b8-9012-cdef-345678901234" in job_ids
+        assert "d4e5f6a7-b8c9-0123-defa-456789012345" in job_ids
+
+    def test_list_jobs_hides_test_jobs_in_real_mode(
+        self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
+    ) -> None:
         """Test that test jobs are hidden in real mode but shown in mock mode."""
         from mistral_ocr.client import MistralOCRClient
-        
+
         # Create client in real mode
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False
-        
+
         # Create a mix of real and test jobs
         test_doc_uuid = "test-doc-uuid-filter"
         real_doc_uuid = "real-doc-uuid"
         client.db.store_document(test_doc_uuid, "Test Document")
         client.db.store_document(real_doc_uuid, "Real Document")
-        
+
         # Add test jobs (should be filtered out)
         client.db.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
         client.db.store_job("test_job_example", test_doc_uuid, "pending", 1)
         client.db.store_job("job123", test_doc_uuid, "completed", 1)
-        
-        # Add real job (should be shown) - use UUID format like real Mistral jobs
-        client.db.store_job("12345678-1234-5678-9abc-123456789abc", real_doc_uuid, "SUCCESS", 1)
-        
+
+        # Add production job (should be shown) - use UUID-like pattern
+        client.db.store_job("f47ac10b-58cc-4372-a567-0e02b2c3d479", real_doc_uuid, "SUCCESS", 1)
+
         # Mock check_job_status to avoid actual API calls
         def mock_check_status(job_id):
             return "SUCCESS"
+
         client.check_job_status = mock_check_status
-        
+
         # Call list_all_jobs in real mode - should filter test jobs
         jobs = client.list_all_jobs()
-        job_ids = {job['id'] for job in jobs}
-        
+        job_ids = {job["id"] for job in jobs}
+
         # Test jobs should be filtered out
         assert "job_001" not in job_ids
         assert "test_job_example" not in job_ids
         assert "job123" not in job_ids
-        
-        # Real job should be included
-        assert "12345678-1234-5678-9abc-123456789abc" in job_ids
 
-    def test_list_jobs_shows_test_jobs_in_mock_mode(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        # Production job should be included
+        assert "f47ac10b-58cc-4372-a567-0e02b2c3d479" in job_ids
+
+    def test_list_jobs_shows_test_jobs_in_mock_mode(
+        self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
+    ) -> None:
         """Test that test jobs are shown in mock mode for testing purposes."""
         from mistral_ocr.client import MistralOCRClient
-        
+
         # Create client in mock mode
         client = MistralOCRClient(api_key="test")
-        assert client.mock_mode == True
-        
+        assert client.mock_mode
+
         # Create test jobs
         test_doc_uuid = "test-doc-uuid-mock"
         client.db.store_document(test_doc_uuid, "Test Document")
         client.db.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
         client.db.store_job("test_job_example", test_doc_uuid, "pending", 1)
-        
+
         # Call list_all_jobs in mock mode - should show test jobs
         jobs = client.list_all_jobs()
-        job_ids = {job['id'] for job in jobs}
-        
+        job_ids = {job["id"] for job in jobs}
+
         # Test jobs should be included in mock mode
         assert "job_001" in job_ids
         assert "test_job_example" in job_ids
 
-    def test_api_refresh_tracking(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+    def test_api_refresh_tracking(
+        self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
+    ) -> None:
         """Test that API refresh information is stored correctly."""
-        from mistral_ocr.client import MistralOCRClient
         import json
-        
+
+        from mistral_ocr.client import MistralOCRClient
+
         # Create client in real mode
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False
-        
+
         # Create a realistic job
         test_doc_uuid = "tracking-test-doc"
         client.db.store_document(test_doc_uuid, "Tracking Test")
-        client.db.store_job("12345678-abcd-efgh-ijkl-123456789abc", test_doc_uuid, "running", 1)
-        
+        client.db.store_job("test-tracking-job", test_doc_uuid, "running", 1)
+
         # Mock the API call to return a job object
         class MockBatchJob:
             def __init__(self):
-                self.id = "12345678-abcd-efgh-ijkl-123456789abc"
+                self.id = "test-tracking-job"
                 self.status = "completed"
                 self.created_at = "2023-12-01T10:00:00Z"
                 self.completed_at = "2023-12-01T10:05:00Z"
@@ -453,25 +471,25 @@ class TestJobStatusListing:
                 self.input_files = ["file_123"]
                 self.output_file = "output_456"
                 self.errors = None
-        
+
         # Mock the client.batch.jobs.get method directly
         def mock_get_job(job_id):
             return MockBatchJob()
-        
+
         # Replace the real API method with our mock
         client.client.batch.jobs.get = mock_get_job
-        
+
         # Call get_job_details which should trigger API refresh
-        job_details = client.get_job_details("12345678-abcd-efgh-ijkl-123456789abc")
-        
+        job_details = client.get_job_details("test-tracking-job")
+
         # Verify tracking information was stored
         assert job_details["status"] == "completed"
         assert job_details["last_api_refresh"] is not None
         assert job_details["api_response_json"] is not None
-        
+
         # Verify API response JSON contains expected fields
         api_data = json.loads(job_details["api_response_json"])
-        assert api_data["id"] == "12345678-abcd-efgh-ijkl-123456789abc"
+        assert api_data["id"] == "test-tracking-job"
         assert api_data["status"] == "completed"
         assert api_data["created_at"] == "2023-12-01T10:00:00Z"
         assert api_data["completed_at"] == "2023-12-01T10:05:00Z"

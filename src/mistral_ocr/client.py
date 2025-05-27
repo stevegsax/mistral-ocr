@@ -2,7 +2,6 @@
 
 import base64
 import json
-import logging
 import mimetypes
 import os
 import pathlib
@@ -55,11 +54,11 @@ class MistralOCRClient:
 
     def _setup_logging(self) -> None:
         """Set up application logging."""
-        from mistral_ocr.logging import setup_logging
+        from mistral_ocr.logging import get_logger, setup_logging
 
-        log_directory = XDGPaths.get_data_dir()
+        log_directory = XDGPaths.get_state_dir()
         self.log_file = setup_logging(log_directory)
-        self.logger = logging.getLogger(__name__)
+        self.logger = get_logger(__name__)
 
     def _setup_database(self) -> None:
         """Set up database connection."""
@@ -745,8 +744,9 @@ class MistralOCRClient:
                 "job_pending",
                 "job_running",
                 "job123",  # Simple test IDs
-                "real-",  # Test jobs with realistic prefixes
                 "abc123-",  # Test jobs with alphanumeric prefixes
+                "test-",  # Test jobs with test- prefix
+                "real-",  # Test jobs with realistic prefixes
             ]
 
             # Check if job ID matches any test pattern

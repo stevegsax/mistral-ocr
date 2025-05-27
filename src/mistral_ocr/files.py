@@ -1,8 +1,9 @@
 """File handling utilities for OCR processing."""
 
-import logging
 import pathlib
 from typing import List, Set
+
+import structlog
 
 
 class FileCollector:
@@ -10,7 +11,7 @@ class FileCollector:
 
     SUPPORTED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 
-    def __init__(self, logger: logging.Logger):
+    def __init__(self, logger: structlog.BoundLogger):
         """Initialize the file collector.
 
         Args:

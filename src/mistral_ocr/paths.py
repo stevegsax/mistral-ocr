@@ -15,7 +15,7 @@ class XDGPaths:
         """Get the XDG data directory for the application.
 
         Returns:
-            Path to data directory (for logs, downloads, etc.)
+            Path to data directory (for downloads, etc.)
         """
         xdg_data_home = os.environ.get("XDG_DATA_HOME")
         if xdg_data_home:
@@ -33,7 +33,7 @@ class XDGPaths:
         """Get the XDG state directory for the application.
 
         Returns:
-            Path to state directory (for database, persistent state)
+            Path to state directory (for database, logs, persistent state)
         """
         xdg_state_home = os.environ.get("XDG_STATE_HOME")
         if xdg_state_home:
@@ -53,7 +53,7 @@ class XDGPaths:
         Returns:
             Path to the log file
         """
-        return cls.get_data_dir() / "mistral.log"
+        return cls.get_state_dir() / "mistral.log"
 
     @classmethod
     def get_database_path(cls) -> pathlib.Path:

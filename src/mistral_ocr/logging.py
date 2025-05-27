@@ -2,10 +2,13 @@
 
 import logging
 import pathlib
+import sys
+
+import structlog
 
 
 def setup_logging(log_dir: pathlib.Path) -> pathlib.Path:
-    """Set up logging and return the log file path.
+    """Set up structlog and return the log file path.
 
     Args:
         log_dir: Directory where log file should be created
@@ -21,12 +24,31 @@ def setup_logging(log_dir: pathlib.Path) -> pathlib.Path:
     # Create the log file
     log_file.touch()
 
-    # Configure logging to write to the file
-    logging.basicConfig(
-        filename=str(log_file),
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        force=True,  # Force reconfiguration even if logging was already configured
+    # Configure structlog
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.dev.ConsoleRenderer()
+            if sys.stderr.isatty()
+            else structlog.processors.JSONRenderer(),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+        logger_factory=structlog.WriteLoggerFactory(file=open(log_file, "a")),
+        cache_logger_on_first_use=True,
     )
 
     return log_file
+
+
+def get_logger(name: str) -> structlog.BoundLogger:
+    """Get a structured logger instance.
+
+    Args:
+        name: Logger name (typically __name__)
+
+    Returns:
+        Configured structlog BoundLogger instance
+    """
+    return structlog.get_logger(name)
