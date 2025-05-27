@@ -150,7 +150,6 @@ class TestFileSubmission:
         job_id = client.submit_documents([directory], recursive=True)  # type: ignore
         assert job_id is not None
 
-    @pytest.mark.xfail(reason="Batch partitioning not implemented")
     def test_automatic_batch_partitioning(
         self, tmp_path: pathlib.Path, client: MistralOCRClient
     ) -> None:
@@ -271,7 +270,6 @@ class TestAdvancedOptions:
         assert log_file.exists()
         assert "File not found" in log_file.read_text()
 
-    @pytest.mark.xfail(reason="Batch processing check not implemented")
     def test_batch_processing_for_cost_management(
         self, tmp_path: pathlib.Path, client: MistralOCRClient
     ) -> None:
