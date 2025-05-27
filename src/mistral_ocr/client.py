@@ -596,60 +596,66 @@ class MistralOCRClient:
 
     def list_all_jobs(self) -> List[dict]:
         """List all jobs with their basic status information.
-        
+
         In real mode, fetches live status from Mistral API and updates database.
         In mock mode, uses database only.
+
+        Filters out test jobs from the results.
 
         Returns:
             List of dictionaries containing job information with keys: id, status, submitted
         """
         # Get all jobs from database first
         jobs = self.db.get_all_jobs()
-        
+
+        # Filter out test jobs unless in mock mode (for testing)
+        if not self.mock_mode:
+            jobs = self._filter_test_jobs(jobs)
+
         if not self.mock_mode:
             # In real mode, refresh status from Mistral API
             # Skip API calls for jobs that won't change: SUCCESS (final) and pending (not started)
             skip_statuses = {"SUCCESS", "pending"}
-            jobs_to_refresh = [job for job in jobs if job['status'] not in skip_statuses]
+            jobs_to_refresh = [job for job in jobs if job["status"] not in skip_statuses]
             skipped_count = len(jobs) - len(jobs_to_refresh)
-            
+
             if skipped_count > 0:
                 msg = f"Skipping API refresh for {skipped_count} jobs with final/pending status"
                 self.logger.debug(msg)
-            
+
             if jobs_to_refresh:
                 count = len(jobs_to_refresh)
                 self.logger.info(f"Refreshing status for {count} jobs from Mistral API")
-                
+
                 updated_count = 0
                 for job in jobs_to_refresh:
-                    job_id = job['id']
+                    job_id = job["id"]
                     try:
                         # Fetch live status from API (this updates database via check_job_status)
                         current_status = self.check_job_status(job_id)
-                        
+
                         # Update job status if it changed
-                        if current_status != job['status']:
-                            old_status = job['status']
+                        if current_status != job["status"]:
+                            old_status = job["status"]
                             msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
                             self.logger.debug(msg)
-                            job['status'] = current_status  # Update in-memory for immediate display
+                            job["status"] = current_status  # Update in-memory for immediate display
                             updated_count += 1
-                            
+
                     except Exception as e:
                         self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
                         # Keep existing status from database
-                        
+
                 if updated_count > 0:
                     self.logger.info(f"Updated status for {updated_count} jobs")
             else:
                 self.logger.debug("No jobs require status refresh")
-        
+
         return jobs
 
     def get_job_details(self, job_id: str) -> dict:
         """Get detailed status information for a specific job.
-        
+
         In real mode, fetches live status from Mistral API and updates database.
         In mock mode, uses database only.
 
@@ -671,22 +677,61 @@ class MistralOCRClient:
             # In real mode, refresh status from Mistral API
             try:
                 current_status = self.check_job_status(job_id)
-                
+
                 # Update status if it changed
-                if current_status != job_details['status']:
-                    old_status = job_details['status']
+                if current_status != job_details["status"]:
+                    old_status = job_details["status"]
                     msg = f"Job {job_id} status refreshed: {old_status} -> {current_status}"
                     self.logger.debug(msg)
-                    job_details['status'] = current_status
-                    
+                    job_details["status"] = current_status
+
                     # Update completed timestamp if job finished
                     finished_states = ["SUCCESS", "COMPLETED", "SUCCEEDED", "FAILED", "CANCELLED"]
                     if current_status.upper() in finished_states:
-                        completed_time = job_details.get('updated', job_details['submitted'])
-                        job_details['completed'] = completed_time
-                    
+                        completed_time = job_details.get("updated", job_details["submitted"])
+                        job_details["completed"] = completed_time
+
             except Exception as e:
                 self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
                 # Keep existing status from database
 
         return job_details
+
+    def _filter_test_jobs(self, jobs: List[dict]) -> List[dict]:
+        """Filter out test jobs from the job list.
+
+        Args:
+            jobs: List of job dictionaries
+
+        Returns:
+            Filtered list with test jobs removed
+        """
+
+        def is_test_job(job: dict) -> bool:
+            job_id = job["id"]
+
+            # Filter out common test job patterns
+            test_patterns = [
+                "job_",  # Mock job IDs like job_001, job_012
+                "test_job_",  # Explicit test jobs
+                "job_success",  # Test jobs with specific names
+                "job_pending",
+                "job_running",
+                "job123",  # Simple test IDs
+            ]
+
+            # Check if job ID matches any test pattern
+            for pattern in test_patterns:
+                if job_id.startswith(pattern) or job_id == pattern:
+                    return True
+
+            return False
+
+        # Filter out test jobs
+        filtered_jobs = [job for job in jobs if not is_test_job(job)]
+
+        if len(filtered_jobs) != len(jobs):
+            filtered_count = len(jobs) - len(filtered_jobs)
+            self.logger.debug(f"Filtered out {filtered_count} test jobs from results")
+
+        return filtered_jobs

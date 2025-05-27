@@ -306,15 +306,15 @@ class TestJobStatusListing:
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False  # Force real mode for this test
         
-        # Create a test job with stale status in database
-        test_doc_uuid = "test-doc-uuid-refresh"
-        client.db.store_document(test_doc_uuid, "Test Document")
-        client.db.store_job("test_job_refresh", test_doc_uuid, "running", 1)  # Use "running" status
+        # Create a realistic job with stale status in database
+        test_doc_uuid = "real-doc-uuid-refresh"
+        client.db.store_document(test_doc_uuid, "Real Document")
+        client.db.store_job("abc123-real-job-id", test_doc_uuid, "running", 1)  # Use realistic job ID
         
         # Mock the check_job_status method to return updated status
         original_method = client.check_job_status
         def mock_check_status(job_id):
-            if job_id == "test_job_refresh":
+            if job_id == "abc123-real-job-id":
                 return "completed"  # Simulate API returning updated status
             return original_method(job_id)
         
@@ -324,7 +324,7 @@ class TestJobStatusListing:
         jobs = client.list_all_jobs()
         
         # Verify the job status was updated
-        refresh_job = next((job for job in jobs if job['id'] == 'test_job_refresh'), None)
+        refresh_job = next((job for job in jobs if job['id'] == 'abc123-real-job-id'), None)
         assert refresh_job is not None
         assert refresh_job['status'] == 'completed'
 
@@ -337,12 +337,12 @@ class TestJobStatusListing:
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False  # Force real mode for this test
         
-        # Create test jobs with different statuses
-        test_doc_uuid = "test-doc-uuid-skip"
-        client.db.store_document(test_doc_uuid, "Test Document")
-        client.db.store_job("job_success", test_doc_uuid, "SUCCESS", 1)
-        client.db.store_job("job_pending", test_doc_uuid, "pending", 1)  
-        client.db.store_job("job_running", test_doc_uuid, "running", 1)
+        # Create realistic jobs with different statuses
+        real_doc_uuid = "real-doc-uuid-skip"
+        client.db.store_document(real_doc_uuid, "Real Document")
+        client.db.store_job("real-success-12345", real_doc_uuid, "SUCCESS", 1)
+        client.db.store_job("real-pending-67890", real_doc_uuid, "pending", 1)  
+        client.db.store_job("real-running-abcde", real_doc_uuid, "running", 1)
         
         # Mock the check_job_status method to track which jobs are checked
         api_calls = []
@@ -357,15 +357,76 @@ class TestJobStatusListing:
         jobs = client.list_all_jobs()
         
         # Verify only the running job was checked via API
-        assert "job_running" in api_calls
-        assert "job_success" not in api_calls  # Should be skipped
-        assert "job_pending" not in api_calls  # Should be skipped
+        assert "real-running-abcde" in api_calls
+        assert "real-success-12345" not in api_calls  # Should be skipped
+        assert "real-pending-67890" not in api_calls  # Should be skipped
         
         # Verify all jobs are still returned
         job_ids = {job['id'] for job in jobs}
-        assert "job_success" in job_ids
-        assert "job_pending" in job_ids
-        assert "job_running" in job_ids
+        assert "real-success-12345" in job_ids
+        assert "real-pending-67890" in job_ids
+        assert "real-running-abcde" in job_ids
+
+    def test_list_jobs_hides_test_jobs_in_real_mode(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        """Test that test jobs are hidden in real mode but shown in mock mode."""
+        from mistral_ocr.client import MistralOCRClient
+        
+        # Create client in real mode
+        client = MistralOCRClient(api_key="real-api-key")
+        client.mock_mode = False
+        
+        # Create a mix of real and test jobs
+        test_doc_uuid = "test-doc-uuid-filter"
+        real_doc_uuid = "real-doc-uuid"
+        client.db.store_document(test_doc_uuid, "Test Document")
+        client.db.store_document(real_doc_uuid, "Real Document")
+        
+        # Add test jobs (should be filtered out)
+        client.db.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
+        client.db.store_job("test_job_example", test_doc_uuid, "pending", 1)
+        client.db.store_job("job123", test_doc_uuid, "completed", 1)
+        
+        # Add real job (should be shown)
+        client.db.store_job("real-job-uuid-12345", real_doc_uuid, "SUCCESS", 1)
+        
+        # Mock check_job_status to avoid actual API calls
+        def mock_check_status(job_id):
+            return "SUCCESS"
+        client.check_job_status = mock_check_status
+        
+        # Call list_all_jobs in real mode - should filter test jobs
+        jobs = client.list_all_jobs()
+        job_ids = {job['id'] for job in jobs}
+        
+        # Test jobs should be filtered out
+        assert "job_001" not in job_ids
+        assert "test_job_example" not in job_ids
+        assert "job123" not in job_ids
+        
+        # Real job should be included
+        assert "real-job-uuid-12345" in job_ids
+
+    def test_list_jobs_shows_test_jobs_in_mock_mode(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        """Test that test jobs are shown in mock mode for testing purposes."""
+        from mistral_ocr.client import MistralOCRClient
+        
+        # Create client in mock mode
+        client = MistralOCRClient(api_key="test")
+        assert client.mock_mode == True
+        
+        # Create test jobs
+        test_doc_uuid = "test-doc-uuid-mock"
+        client.db.store_document(test_doc_uuid, "Test Document")
+        client.db.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
+        client.db.store_job("test_job_example", test_doc_uuid, "pending", 1)
+        
+        # Call list_all_jobs in mock mode - should show test jobs
+        jobs = client.list_all_jobs()
+        job_ids = {job['id'] for job in jobs}
+        
+        # Test jobs should be included in mock mode
+        assert "job_001" in job_ids
+        assert "test_job_example" in job_ids
 
 
 # Advanced Options and CLI Tests
