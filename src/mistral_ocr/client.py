@@ -349,8 +349,30 @@ class MistralOCRClient:
                 batch_job.status if isinstance(batch_job.status, str) else batch_job.status.value
             )
 
-            # Update status in database
-            self.db.update_job_status(job_id, status)
+            # Capture full API response as JSON for debugging/tracking
+            import json
+            try:
+                # Convert the response object to dict for JSON serialization
+                api_response = {
+                    "id": batch_job.id,
+                    "status": status,
+                    "created_at": getattr(batch_job, 'created_at', None),
+                    "completed_at": getattr(batch_job, 'completed_at', None),
+                    "metadata": getattr(batch_job, 'metadata', None),
+                    "input_files": getattr(batch_job, 'input_files', None),
+                    "output_file": getattr(batch_job, 'output_file', None),
+                    "errors": getattr(batch_job, 'errors', None),
+                    "refresh_timestamp": self._get_current_timestamp()
+                }
+                api_response_json = json.dumps(api_response, default=str, indent=2)
+                
+                # Update database with API refresh information
+                self.db.update_job_api_refresh(job_id, status, api_response_json)
+                
+            except Exception as e:
+                self.logger.warning(f"Failed to serialize API response for job {job_id}: {e}")
+                # Fallback to basic status update
+                self.db.update_job_status(job_id, status)
 
             return status
         except Exception as e:
@@ -690,6 +712,11 @@ class MistralOCRClient:
                     if current_status.upper() in finished_states:
                         completed_time = job_details.get("updated", job_details["submitted"])
                         job_details["completed"] = completed_time
+                        
+                    # Re-fetch from database to get updated API tracking info
+                    updated_job_details = self.db.get_job_details(job_id)
+                    if updated_job_details:
+                        job_details.update(updated_job_details)
 
             except Exception as e:
                 self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
@@ -737,3 +764,12 @@ class MistralOCRClient:
             self.logger.debug(f"Filtered out {filtered_count} test jobs from results")
 
         return filtered_jobs
+
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp in ISO format.
+        
+        Returns:
+            Current timestamp as ISO format string
+        """
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')

@@ -428,6 +428,55 @@ class TestJobStatusListing:
         assert "job_001" in job_ids
         assert "test_job_example" in job_ids
 
+    def test_api_refresh_tracking(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        """Test that API refresh information is stored correctly."""
+        from mistral_ocr.client import MistralOCRClient
+        import json
+        
+        # Create client in real mode
+        client = MistralOCRClient(api_key="real-api-key")
+        client.mock_mode = False
+        
+        # Create a realistic job
+        test_doc_uuid = "tracking-test-doc"
+        client.db.store_document(test_doc_uuid, "Tracking Test")
+        client.db.store_job("12345678-abcd-efgh-ijkl-123456789abc", test_doc_uuid, "running", 1)
+        
+        # Mock the API call to return a job object
+        class MockBatchJob:
+            def __init__(self):
+                self.id = "12345678-abcd-efgh-ijkl-123456789abc"
+                self.status = "completed"
+                self.created_at = "2023-12-01T10:00:00Z"
+                self.completed_at = "2023-12-01T10:05:00Z"
+                self.metadata = {"job_type": "ocr_batch"}
+                self.input_files = ["file_123"]
+                self.output_file = "output_456"
+                self.errors = None
+        
+        # Mock the client.batch.jobs.get method directly
+        def mock_get_job(job_id):
+            return MockBatchJob()
+        
+        # Replace the real API method with our mock
+        client.client.batch.jobs.get = mock_get_job
+        
+        # Call get_job_details which should trigger API refresh
+        job_details = client.get_job_details("12345678-abcd-efgh-ijkl-123456789abc")
+        
+        # Verify tracking information was stored
+        assert job_details["status"] == "completed"
+        assert job_details["last_api_refresh"] is not None
+        assert job_details["api_response_json"] is not None
+        
+        # Verify API response JSON contains expected fields
+        api_data = json.loads(job_details["api_response_json"])
+        assert api_data["id"] == "12345678-abcd-efgh-ijkl-123456789abc"
+        assert api_data["status"] == "completed"
+        assert api_data["created_at"] == "2023-12-01T10:00:00Z"
+        assert api_data["completed_at"] == "2023-12-01T10:05:00Z"
+        assert "refresh_timestamp" in api_data
+
 
 # Advanced Options and CLI Tests
 class TestAdvancedOptions:

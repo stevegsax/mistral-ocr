@@ -46,6 +46,8 @@ class Database:
                 file_count INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_api_refresh TIMESTAMP,
+                api_response_json TEXT,
                 FOREIGN KEY (document_uuid) REFERENCES documents (uuid)
             )
         """)
@@ -62,6 +64,31 @@ class Database:
             )
         """)
 
+        self.connection.commit()
+        
+        # Handle schema migrations for existing databases
+        self._migrate_schema()
+
+    def _migrate_schema(self) -> None:
+        """Handle database schema migrations for existing databases."""
+        if not self.connection:
+            raise RuntimeError("Database not connected")
+
+        cursor = self.connection.cursor()
+        
+        # Check if new columns exist, if not add them
+        try:
+            cursor.execute("SELECT last_api_refresh FROM jobs LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE jobs ADD COLUMN last_api_refresh TIMESTAMP")
+            
+        try:
+            cursor.execute("SELECT api_response_json FROM jobs LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE jobs ADD COLUMN api_response_json TEXT")
+            
         self.connection.commit()
 
     def execute(self, query: str, params: Optional[Tuple] = None) -> Any:
@@ -176,6 +203,29 @@ class Database:
             WHERE job_id = ?
         """,
             (status, job_id),
+        )
+        self.connection.commit()
+
+    def update_job_api_refresh(self, job_id: str, status: str, api_response_json: str) -> None:
+        """Update job with API refresh information.
+
+        Args:
+            job_id: Job ID
+            status: New status from API
+            api_response_json: Full JSON response from API
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected")
+
+        cursor = self.connection.cursor()
+        cursor.execute(
+            """
+            UPDATE jobs 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP, 
+                last_api_refresh = CURRENT_TIMESTAMP, api_response_json = ?
+            WHERE job_id = ?
+        """,
+            (status, api_response_json, job_id),
         )
         self.connection.commit()
 
@@ -334,7 +384,7 @@ class Database:
         cursor.execute(
             """
             SELECT j.job_id, j.status, j.file_count, j.created_at, j.updated_at,
-                   d.name as document_name
+                   d.name as document_name, j.last_api_refresh, j.api_response_json
             FROM jobs j
             JOIN documents d ON j.document_uuid = d.uuid
             WHERE j.job_id = ?
@@ -353,6 +403,8 @@ class Database:
             "submitted": result[3],
             "updated": result[4],
             "document_name": result[5],
+            "last_api_refresh": result[6],
+            "api_response_json": result[7],
             "completed": result[4] if result[1] in ["completed", "success"] else None,
             "error": None,  # Could be extended to store error messages
         }

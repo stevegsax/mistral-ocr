@@ -117,8 +117,29 @@ def main() -> None:
                 print(f"Submitted: {job_details.get('submitted', 'N/A')}")
                 if job_details.get("completed"):
                     print(f"Completed: {job_details['completed']}")
+                if job_details.get("last_api_refresh"):
+                    print(f"Last API Refresh: {job_details['last_api_refresh']}")
                 if job_details.get("error"):
                     print(f"Error: {job_details['error']}")
+                    
+                # Show API response details if available (for debugging)
+                if job_details.get("api_response_json") and args.job_status:
+                    import json
+                    try:
+                        api_data = json.loads(job_details["api_response_json"])
+                        print("\nAPI Response Details:")
+                        print(f"  Refresh Time: {api_data.get('refresh_timestamp', 'N/A')}")
+                        if api_data.get('created_at'):
+                            print(f"  Created: {api_data['created_at']}")
+                        if api_data.get('completed_at'):
+                            print(f"  Completed: {api_data['completed_at']}")
+                        if api_data.get('output_file'):
+                            print(f"  Output File: {api_data['output_file']}")
+                        if api_data.get('errors'):
+                            print(f"  Errors: {api_data['errors']}")
+                    except json.JSONDecodeError:
+                        pass  # Skip if JSON is invalid
+                        
             except ValueError as e:
                 print(f"Error: {e}", file=sys.stderr)
                 sys.exit(1)
