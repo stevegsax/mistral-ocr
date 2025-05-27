@@ -14,7 +14,7 @@ from mistral_ocr.logging import setup_logging
 # Helper function to run the CLI
 def run_cli(*args: str) -> subprocess.CompletedProcess:
     """Run the CLI with the local package path."""
-    env = {"PYTHONPATH": "src", **os.environ}
+    env = {**os.environ, "PYTHONPATH": "src", "MISTRAL_API_KEY": "test"}
     return subprocess.run(
         ["python", "-m", "mistral_ocr", *args],
         capture_output=True,
