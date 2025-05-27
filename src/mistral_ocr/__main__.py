@@ -18,6 +18,9 @@ def main() -> None:
     parser.add_argument("--query-document", type=str, help="Query job statuses by document name")
     parser.add_argument("--cancel-job", type=str, help="Cancel a job by ID")
 
+    parser.add_argument("--list-jobs", action="store_true", help="List all jobs with their status")
+    parser.add_argument("--job-status", type=str, help="Show detailed status for a specific job")
+
     parser.add_argument(
         "--get-results", type=str, help="Retrieve results for a completed job by ID"
     )
@@ -92,6 +95,34 @@ def main() -> None:
             else:
                 print(f"Failed to cancel job {args.cancel_job}")
 
+        elif args.list_jobs:
+            # List all jobs
+            jobs = client.list_all_jobs()
+            if not jobs:
+                print("No jobs found")
+            else:
+                print(f"{'Job ID':<36} {'Status':<12} {'Submitted':<20}")
+                print("-" * 70)
+                for job in jobs:
+                    print(f"{job['id']:<36} {job['status']:<12} {job['submitted']:<20}")
+
+        elif args.job_status:
+            # Show detailed job status
+            try:
+                job_details = client.get_job_details(args.job_status)
+                print(f"Job ID: {job_details['id']}")
+                print(f"Status: {job_details['status']}")
+                print(f"Document Name: {job_details.get('document_name', 'N/A')}")
+                print(f"File Count: {job_details.get('file_count', 'N/A')}")
+                print(f"Submitted: {job_details.get('submitted', 'N/A')}")
+                if job_details.get("completed"):
+                    print(f"Completed: {job_details['completed']}")
+                if job_details.get("error"):
+                    print(f"Error: {job_details['error']}")
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                sys.exit(1)
+
         elif args.get_results:
             # Get job results
             results = client.get_results(args.get_results)
@@ -128,4 +159,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

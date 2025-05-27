@@ -162,4 +162,3 @@ class ConfigurationManager:
     def log_directory(self) -> pathlib.Path:
         """Get the log directory."""
         return self.data_dir / "logs"
-

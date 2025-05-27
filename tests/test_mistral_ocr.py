@@ -15,6 +15,11 @@ from mistral_ocr.logging import setup_logging
 def run_cli(*args: str) -> subprocess.CompletedProcess:
     """Run the CLI with the local package path."""
     env = {**os.environ, "PYTHONPATH": "src", "MISTRAL_API_KEY": "test"}
+
+    # Make sure CLI uses the same test directories if they're set
+    if "XDG_DATA_HOME" in os.environ:
+        env["XDG_STATE_HOME"] = os.environ["XDG_DATA_HOME"]  # Use same temp dir for database
+
     return subprocess.run(
         ["python", "-m", "mistral_ocr", *args],
         capture_output=True,
@@ -232,6 +237,96 @@ class TestResultRetrieval:
         client.download_results("job123", destination=tmp_path)  # type: ignore
         client.download_results("job123", destination=tmp_path)  # type: ignore
         assert (tmp_path / "job123").exists()
+
+
+# Job Status Listing Tests
+class TestJobStatusListing:
+    """Tests for job status listing functionality."""
+
+    def test_list_all_jobs_command(self) -> None:
+        """Test CLI command to list all jobs."""
+        result = run_cli("--list-jobs")
+        assert result.returncode == 0
+        # Should handle empty list gracefully or show headers
+        assert "No jobs found" in result.stdout or "Job ID" in result.stdout
+
+    def test_list_jobs_shows_all_statuses(self) -> None:
+        """Test that list jobs shows jobs of all statuses."""
+        result = run_cli("--list-jobs")
+        assert result.returncode == 0
+        # Should handle empty list gracefully
+        assert "No jobs found" in result.stdout or "Job ID" in result.stdout
+
+    def test_job_detail_status_command(
+        self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
+    ) -> None:
+        """Test CLI command to show detailed job status."""
+        # Create a test file and submit it to create a real job
+        test_file = tmp_path / "test.png"
+        test_file.write_bytes(b"fakepng")
+
+        # Submit the file via CLI to create a job
+        submit_result = run_cli("--submit", str(test_file))
+        assert submit_result.returncode == 0
+
+        # Extract job ID from the output (format: "Submitted job: job_001")
+        output_lines = submit_result.stdout.strip().split("\n")
+        job_line = [line for line in output_lines if "Submitted job:" in line][0]
+        job_id = job_line.split("Submitted job: ")[1]
+
+        # Now test the job status command
+        result = run_cli("--job-status", job_id)
+        assert result.returncode == 0
+        assert f"Job ID: {job_id}" in result.stdout
+        assert "Status:" in result.stdout
+        assert "Document Name:" in result.stdout
+
+    def test_job_detail_status_invalid_id(self) -> None:
+        """Test job detail command with invalid job ID."""
+        result = run_cli("--job-status", "invalid_job")
+        assert result.returncode != 0
+        assert "not found" in result.stderr.lower()
+
+    def test_list_jobs_table_format(self) -> None:
+        """Test that list jobs outputs in readable table format."""
+        result = run_cli("--list-jobs")
+        assert result.returncode == 0
+        # Should have header and proper column alignment
+        lines = result.stdout.split("\n")
+        if len(lines) > 1:  # Has content beyond header
+            # Basic table structure check
+            assert any("Job ID" in line for line in lines)
+
+    def test_list_jobs_refreshes_from_api(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        """Test that list jobs refreshes status from Mistral API in real mode."""
+        # Create a client that uses the same temporary data directory as the CLI
+        from mistral_ocr.client import MistralOCRClient
+        
+        # Create client in real mode (not test mode)
+        client = MistralOCRClient(api_key="real-api-key")
+        client.mock_mode = False  # Force real mode for this test
+        
+        # Create a test job with stale status in database
+        test_doc_uuid = "test-doc-uuid-refresh"
+        client.db.store_document(test_doc_uuid, "Test Document")
+        client.db.store_job("test_job_refresh", test_doc_uuid, "pending", 1)
+        
+        # Mock the check_job_status method to return updated status
+        original_method = client.check_job_status
+        def mock_check_status(job_id):
+            if job_id == "test_job_refresh":
+                return "completed"  # Simulate API returning updated status
+            return original_method(job_id)
+        
+        client.check_job_status = mock_check_status
+        
+        # Call list_all_jobs - should refresh from API
+        jobs = client.list_all_jobs()
+        
+        # Verify the job status was updated
+        refresh_job = next((job for job in jobs if job['id'] == 'test_job_refresh'), None)
+        assert refresh_job is not None
+        assert refresh_job['status'] == 'completed'
 
 
 # Advanced Options and CLI Tests

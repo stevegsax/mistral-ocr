@@ -269,7 +269,7 @@ class Database:
             raise RuntimeError("Database not connected")
 
         cursor = self.connection.cursor()
-        
+
         # First try to find by UUID
         cursor.execute(
             """
@@ -280,7 +280,7 @@ class Database:
             (identifier,),
         )
         results = cursor.fetchall()
-        
+
         # If no results by UUID, try by name
         if not results:
             cursor.execute(
@@ -296,9 +296,71 @@ class Database:
 
         return [row[0] for row in results]
 
+    def get_all_jobs(self) -> List[dict]:
+        """Get all jobs with basic status information.
+
+        Returns:
+            List of dictionaries containing job information
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected")
+
+        cursor = self.connection.cursor()
+        cursor.execute("""
+            SELECT j.job_id, j.status, j.created_at
+            FROM jobs j
+            ORDER BY j.created_at DESC
+        """)
+
+        jobs = []
+        for row in cursor.fetchall():
+            jobs.append({"id": row[0], "status": row[1], "submitted": row[2]})
+
+        return jobs
+
+    def get_job_details(self, job_id: str) -> Optional[dict]:
+        """Get detailed information for a specific job.
+
+        Args:
+            job_id: Job ID to get details for
+
+        Returns:
+            Dictionary containing detailed job information, or None if not found
+        """
+        if not self.connection:
+            raise RuntimeError("Database not connected")
+
+        cursor = self.connection.cursor()
+        cursor.execute(
+            """
+            SELECT j.job_id, j.status, j.file_count, j.created_at, j.updated_at,
+                   d.name as document_name
+            FROM jobs j
+            JOIN documents d ON j.document_uuid = d.uuid
+            WHERE j.job_id = ?
+        """,
+            (job_id,),
+        )
+
+        result = cursor.fetchone()
+        if not result:
+            return None
+
+        job_details = {
+            "id": result[0],
+            "status": result[1],
+            "file_count": result[2],
+            "submitted": result[3],
+            "updated": result[4],
+            "document_name": result[5],
+            "completed": result[4] if result[1] in ["completed", "success"] else None,
+            "error": None,  # Could be extended to store error messages
+        }
+
+        return job_details
+
     def close(self) -> None:
         """Close the database connection."""
         if self.connection:
             self.connection.close()
             self.connection = None
-

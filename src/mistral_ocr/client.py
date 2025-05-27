@@ -21,10 +21,9 @@ from .paths import XDGPaths
 class MistralOCRClient:
     """Client for submitting OCR jobs to the Mistral API."""
 
-    # Mock state for testing
+    # Mock state counters for testing
     _mock_job_counter = 0
     _mock_file_counter = 0
-    _mock_jobs: dict[str, str] = {}  # job_id -> status
     _mock_results_call_count = 0
     _mock_download_call_count = 0
 
@@ -57,7 +56,7 @@ class MistralOCRClient:
     def _setup_logging(self) -> None:
         """Set up application logging."""
         from mistral_ocr.logging import setup_logging
-        
+
         log_directory = XDGPaths.get_data_dir()
         self.log_file = setup_logging(log_directory)
         self.logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ class MistralOCRClient:
     def _setup_database(self) -> None:
         """Set up database connection."""
         from mistral_ocr.database import Database
-        
+
         db_path = XDGPaths.get_database_path()
         self.db = Database(db_path)
         self.db.connect()
@@ -76,13 +75,15 @@ class MistralOCRClient:
         self.file_collector = FileCollector(self.logger)
         self.result_parser = OCRResultParser(self.logger)
 
-    def _resolve_document(self, document_name: Optional[str], document_uuid: Optional[str]) -> tuple[str, str]:
+    def _resolve_document(
+        self, document_name: Optional[str], document_uuid: Optional[str]
+    ) -> tuple[str, str]:
         """Resolve document UUID and name for job association.
-        
+
         Args:
             document_name: Optional document name
             document_uuid: Optional document UUID
-            
+
         Returns:
             Tuple of (document_uuid, document_name)
         """
@@ -92,19 +93,21 @@ class MistralOCRClient:
             resolved_name = document_name or f"Document_{document_uuid[:8]}"
             self.db.store_document(document_uuid, resolved_name)
             return document_uuid, resolved_name
-        
+
         if document_name:
             # Check if we should append to an existing document or create new one
             existing_uuid = self.db.get_recent_document_by_name(document_name)
             if existing_uuid:
-                self.logger.info(f"Appending to existing document '{document_name}' (UUID: {existing_uuid})")
+                self.logger.info(
+                    f"Appending to existing document '{document_name}' (UUID: {existing_uuid})"
+                )
                 return existing_uuid, document_name
             else:
                 new_uuid = str(uuid.uuid4())
                 self.logger.info(f"Creating new document '{document_name}' (UUID: {new_uuid})")
                 self.db.store_document(new_uuid, document_name)
                 return new_uuid, document_name
-        
+
         # Generate both UUID and name
         new_uuid = str(uuid.uuid4())
         generated_name = f"Document_{new_uuid[:8]}"
@@ -145,21 +148,22 @@ class MistralOCRClient:
         # Batch processing - split into groups of 100 files max
         batches = [actual_files[i : i + 100] for i in range(0, len(actual_files), 100)]
         job_ids = []
-        
+
         if len(batches) > 1:
             self.logger.info(f"Splitting into {len(batches)} batches (100 files max per batch)")
-        
+
         ocr_model = model or "mistral-ocr-latest"
         self.logger.info(f"Using OCR model: {ocr_model}")
 
         for batch_idx, batch_files in enumerate(batches, 1):
-            self.logger.info(f"Processing batch {batch_idx}/{len(batches)} with {len(batch_files)} files")
+            self.logger.info(
+                f"Processing batch {batch_idx}/{len(batches)} with {len(batch_files)} files"
+            )
             try:
                 if self.mock_mode:
-                    # Mock implementation
+                    # Mock implementation - create job in database
                     MistralOCRClient._mock_job_counter += 1
                     job_id = f"job_{MistralOCRClient._mock_job_counter:03d}"
-                    MistralOCRClient._mock_jobs[job_id] = "pending"
 
                     # Mock file uploads
                     for file_path in batch_files:
@@ -201,13 +205,17 @@ class MistralOCRClient:
                         # Clean up temporary batch file
                         if batch_file_path.exists():
                             batch_file_path.unlink()
-                            self.logger.debug(f"Cleaned up temporary batch file: {batch_file_path.name}")
+                            self.logger.debug(
+                                f"Cleaned up temporary batch file: {batch_file_path.name}"
+                            )
 
                 job_ids.append(job_id)
 
                 # Store job metadata
                 self.db.store_job(job_id, doc_uuid, "pending", len(batch_files))
-                self.logger.info(f"Stored job metadata for job {job_id} with {len(batch_files)} files")
+                self.logger.info(
+                    f"Stored job metadata for job {job_id} with {len(batch_files)} files"
+                )
 
                 self.logger.info(f"Created batch job {job_id} with {len(batch_files)} files")
 
@@ -220,7 +228,12 @@ class MistralOCRClient:
         if len(job_ids) == 1:
             self.logger.info(f"Document submission completed successfully. Job ID: {job_ids[0]}")
         else:
-            self.logger.info(f"Document submission completed successfully. Created {len(job_ids)} batch jobs: {', '.join(job_ids)}")
+            job_list = ", ".join(job_ids)
+            msg = (
+                f"Document submission completed successfully. "
+                f"Created {len(job_ids)} batch jobs: {job_list}"
+            )
+            self.logger.info(msg)
 
         # Return single job ID if only one batch, otherwise return list
         return job_ids[0] if len(job_ids) == 1 else job_ids
@@ -243,7 +256,7 @@ class MistralOCRClient:
             successful_entries = 0
             with os.fdopen(temp_fd, "w") as f:
                 for i, file_path in enumerate(file_paths):
-                    self.logger.debug(f"Encoding file {i+1}/{len(file_paths)}: {file_path.name}")
+                    self.logger.debug(f"Encoding file {i + 1}/{len(file_paths)}: {file_path.name}")
                     data_url = self._encode_file_to_data_url(file_path)
                     if data_url:
                         entry = {
@@ -257,8 +270,10 @@ class MistralOCRClient:
                         successful_entries += 1
                     else:
                         self.logger.warning(f"Failed to encode file: {file_path}")
-            
-            self.logger.info(f"Created batch file with {successful_entries}/{len(file_paths)} entries")
+
+            self.logger.info(
+                f"Created batch file with {successful_entries}/{len(file_paths)} entries"
+            )
         except Exception as e:
             self.logger.error(f"Error creating batch file: {str(e)}")
             # Clean up on error
@@ -316,17 +331,23 @@ class MistralOCRClient:
             ValueError: If the job ID is invalid
         """
         if self.mock_mode:
-            # Mock implementation
+            # Mock implementation - check database first, then return default status
             if "invalid" in job_id.lower():
                 raise ValueError(f"Invalid job ID: {job_id}")
 
-            status = MistralOCRClient._mock_jobs.get(job_id, "completed")
-            self.db.update_job_status(job_id, status)
-            return status
+            # Try to get from database first
+            job_details = self.db.get_job_details(job_id)
+            if job_details:
+                return job_details["status"]
+
+            # If not found, return default completed status
+            return "completed"
 
         try:
             batch_job = self.client.batch.jobs.get(job_id=job_id)
-            status = batch_job.status if isinstance(batch_job.status, str) else batch_job.status.value
+            status = (
+                batch_job.status if isinstance(batch_job.status, str) else batch_job.status.value
+            )
 
             # Update status in database
             self.db.update_job_status(job_id, status)
@@ -372,16 +393,23 @@ class MistralOCRClient:
         """
         if self.mock_mode:
             # Mock implementation - always return True for test compatibility
-            if job_id not in MistralOCRClient._mock_jobs:
-                MistralOCRClient._mock_jobs[job_id] = "pending"
-            MistralOCRClient._mock_jobs[job_id] = "cancelled"
+            # Update status in database if job exists, otherwise create it
+            job_details = self.db.get_job_details(job_id)
+            if not job_details:
+                # Create a mock job entry for cancellation
+                self.db.store_job(job_id, "mock-doc-uuid", "pending", 1)
+
             self.db.update_job_status(job_id, "cancelled")
             self.logger.info(f"Successfully cancelled job {job_id}")
             return True
 
         try:
             cancelled_job = self.client.batch.jobs.cancel(job_id=job_id)
-            status = cancelled_job.status if isinstance(cancelled_job.status, str) else cancelled_job.status.value
+            status = (
+                cancelled_job.status
+                if isinstance(cancelled_job.status, str)
+                else cancelled_job.status.value
+            )
             success = status == "cancelled"
 
             if success:
@@ -433,7 +461,7 @@ class MistralOCRClient:
             # Download the output file
             output_response = self.client.files.download(file_id=batch_job.output_file)
             output_content = output_response.read().decode("utf-8")
-            
+
             # Parse the results using the result parser
             return self.result_parser.parse_batch_output(output_content, job_id)
 
@@ -499,7 +527,9 @@ class MistralOCRClient:
             job_dir.mkdir(parents=True, exist_ok=True)
             raise RuntimeError(error_msg)
 
-    def download_document_results(self, document_identifier: str, destination: Optional[pathlib.Path] = None) -> None:
+    def download_document_results(
+        self, document_identifier: str, destination: Optional[pathlib.Path] = None
+    ) -> None:
         """Download results for all jobs associated with a document.
 
         Args:
@@ -507,19 +537,19 @@ class MistralOCRClient:
             destination: The directory to download results to. If None, uses XDG_DATA_HOME
         """
         self.logger.info(f"Starting download for document: {document_identifier}")
-        
+
         destination = XDGPaths.resolve_download_destination(destination)
 
         # Get all jobs for this document (by name or UUID)
         job_ids = self.db.get_jobs_by_document_identifier(document_identifier)
-        
+
         if not job_ids:
             error_msg = f"No jobs found for document: {document_identifier}"
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
         self.logger.info(f"Found {len(job_ids)} job(s) for document {document_identifier}")
-        
+
         completed_jobs = []
         failed_jobs = []
         total_results = 0
@@ -527,22 +557,24 @@ class MistralOCRClient:
         for job_id in job_ids:
             try:
                 self.logger.info(f"Processing job {job_id}")
-                
+
                 # Check if job is completed
                 status = self.check_job_status(job_id)
                 if status.upper() not in ["SUCCESS", "COMPLETED", "SUCCEEDED"]:
-                    self.logger.warning(f"Job {job_id} is not completed (status: {status}), skipping")
+                    self.logger.warning(
+                        f"Job {job_id} is not completed (status: {status}), skipping"
+                    )
                     failed_jobs.append((job_id, f"Not completed (status: {status})"))
                     continue
 
                 # Download results for this job
                 self.download_results(job_id, destination)
                 completed_jobs.append(job_id)
-                
+
                 # Count results for logging
                 results = self.get_results(job_id)
                 total_results += len(results)
-                
+
             except Exception as e:
                 error_msg = f"Failed to process job {job_id}: {str(e)}"
                 self.logger.error(error_msg)
@@ -550,12 +582,98 @@ class MistralOCRClient:
 
         # Log summary
         if completed_jobs:
-            self.logger.info(f"Successfully downloaded {total_results} results from {len(completed_jobs)} job(s)")
-        
+            self.logger.info(
+                f"Successfully downloaded {total_results} results from {len(completed_jobs)} job(s)"
+            )
+
         if failed_jobs:
             self.logger.warning(f"Failed to download from {len(failed_jobs)} job(s):")
             for job_id, error in failed_jobs:
                 self.logger.warning(f"  {job_id}: {error}")
-        
+
         if not completed_jobs:
             raise RuntimeError(f"No results could be downloaded for document {document_identifier}")
+
+    def list_all_jobs(self) -> List[dict]:
+        """List all jobs with their basic status information.
+        
+        In real mode, fetches live status from Mistral API and updates database.
+        In mock mode, uses database only.
+
+        Returns:
+            List of dictionaries containing job information with keys: id, status, submitted
+        """
+        # Get all jobs from database first
+        jobs = self.db.get_all_jobs()
+        
+        if not self.mock_mode:
+            # In real mode, refresh status from Mistral API
+            self.logger.info(f"Refreshing status for {len(jobs)} jobs from Mistral API")
+            
+            updated_count = 0
+            for job in jobs:
+                job_id = job['id']
+                try:
+                    # Fetch live status from API (this updates database via check_job_status)
+                    current_status = self.check_job_status(job_id)
+                    
+                    # Update job status if it changed
+                    if current_status != job['status']:
+                        old_status = job['status']
+                        msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
+                        self.logger.debug(msg)
+                        job['status'] = current_status  # Update in-memory for immediate display
+                        updated_count += 1
+                        
+                except Exception as e:
+                    self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
+                    # Keep existing status from database
+                    
+            if updated_count > 0:
+                self.logger.info(f"Updated status for {updated_count} jobs")
+        
+        return jobs
+
+    def get_job_details(self, job_id: str) -> dict:
+        """Get detailed status information for a specific job.
+        
+        In real mode, fetches live status from Mistral API and updates database.
+        In mock mode, uses database only.
+
+        Args:
+            job_id: The job ID to get details for
+
+        Returns:
+            Dictionary containing detailed job information
+
+        Raises:
+            ValueError: If the job ID is not found
+        """
+        # Get job from database first
+        job_details = self.db.get_job_details(job_id)
+        if not job_details:
+            raise ValueError(f"Job {job_id} not found")
+
+        if not self.mock_mode:
+            # In real mode, refresh status from Mistral API
+            try:
+                current_status = self.check_job_status(job_id)
+                
+                # Update status if it changed
+                if current_status != job_details['status']:
+                    old_status = job_details['status']
+                    msg = f"Job {job_id} status refreshed: {old_status} -> {current_status}"
+                    self.logger.debug(msg)
+                    job_details['status'] = current_status
+                    
+                    # Update completed timestamp if job finished
+                    finished_states = ["SUCCESS", "COMPLETED", "SUCCEEDED", "FAILED", "CANCELLED"]
+                    if current_status.upper() in finished_states:
+                        completed_time = job_details.get('updated', job_details['submitted'])
+                        job_details['completed'] = completed_time
+                    
+            except Exception as e:
+                self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
+                # Keep existing status from database
+
+        return job_details
