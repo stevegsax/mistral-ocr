@@ -412,7 +412,7 @@ class MistralOCRClient:
 
             # Download the output file
             output_response = self.client.files.download(file_id=batch_job.output_file)
-            output_content = output_response.content.decode("utf-8")
+            output_content = output_response.read().decode("utf-8")
 
             # Parse the results (JSONL format from batch API)
             results = []
