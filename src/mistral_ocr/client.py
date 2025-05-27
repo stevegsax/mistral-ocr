@@ -401,7 +401,7 @@ class MistralOCRClient:
         # Check job status first
         status = self.check_job_status(job_id)
 
-        if status not in ["completed", "succeeded"]:
+        if status.upper() not in ["SUCCESS", "COMPLETED", "SUCCEEDED"]:
             raise RuntimeError(f"Job {job_id} is not yet completed (status: {status})")
 
         try:
