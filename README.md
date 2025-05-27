@@ -235,6 +235,7 @@ uv run python -m mistral_ocr --help
 
 ## Reference Documentation
 
-- The OpenAPI specification for the MistralAI API can be found in `examples/plugin-redoc-0.yaml`.
+- The OpenAPI specification for the MistralAI API can be found in `reference/plugin-redoc-0.yaml`.
+- The `reference/` directory contains markdown files with more information about the MistralAI API.
 - A working example that calls the MistralAI API can be found in `examples/main.py`.
 
