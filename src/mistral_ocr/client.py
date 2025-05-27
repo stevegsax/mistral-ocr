@@ -1,9 +1,12 @@
 """Mistral OCR client for API interactions."""
 
+import base64
 import json
 import logging
+import mimetypes
 import os
 import pathlib
+import tempfile
 import uuid
 from typing import List, Optional, Union
 
@@ -165,24 +168,35 @@ class MistralOCRClient:
                         file_id = f"file_{MistralOCRClient._mock_file_counter:03d}"
                         self.db.store_page(str(file_path), doc_uuid, file_id)
                 else:
-                    # Real implementation
-                    file_ids = []
-                    for file_path in batch_files:
-                        with open(file_path, "rb") as f:
-                            upload_result = self.client.files.upload(
-                                file={"file_name": file_path.name, "content": f}
+                    # Real implementation - create JSONL batch file
+                    batch_file_path = self._create_batch_file(batch_files)
+
+                    try:
+                        # Upload the batch file
+                        with open(batch_file_path, "rb") as f:
+                            batch_upload = self.client.files.upload(
+                                file={"file_name": batch_file_path.name, "content": f},
+                                purpose="batch",
                             )
-                            file_ids.append(upload_result.id)
 
-                            # Store page metadata
-                            self.db.store_page(str(file_path), doc_uuid, upload_result.id)
+                        # Create batch job
+                        batch_job = self.client.batch.jobs.create(
+                            input_files=[batch_upload.id],
+                            endpoint="/v1/ocr",
+                            model=ocr_model,
+                            metadata={"job_type": "ocr_batch"},
+                        )
 
-                    # Create batch job
-                    batch_job = self.client.batch.jobs.create(
-                        input_files=file_ids, endpoint="/v1/ocr", model=ocr_model
-                    )
+                        job_id = batch_job.id
 
-                    job_id = batch_job.id
+                        # Store page metadata
+                        for file_path in batch_files:
+                            self.db.store_page(str(file_path), doc_uuid, batch_upload.id)
+
+                    finally:
+                        # Clean up temporary batch file
+                        if batch_file_path.exists():
+                            batch_file_path.unlink()
 
                 job_ids.append(job_id)
 
@@ -198,6 +212,77 @@ class MistralOCRClient:
 
         # Return single job ID if only one batch, otherwise return list
         return job_ids[0] if len(job_ids) == 1 else job_ids
+
+    def _create_batch_file(self, file_paths: List[pathlib.Path]) -> pathlib.Path:
+        """Create a JSONL batch file for OCR processing.
+
+        Args:
+            file_paths: List of file paths to process
+
+        Returns:
+            Path to the created batch file
+        """
+        # Create temporary file for batch processing
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".jsonl", prefix="mistral_ocr_batch_")
+        batch_file_path = pathlib.Path(temp_path)
+
+        try:
+            with os.fdopen(temp_fd, "w") as f:
+                for i, file_path in enumerate(file_paths):
+                    data_url = self._encode_file_to_data_url(file_path)
+                    if data_url:
+                        entry = {
+                            "custom_id": file_path.name,
+                            "body": {
+                                "document": {"type": "image_url", "image_url": data_url},
+                                "include_image_base64": True,
+                            },
+                        }
+                        f.write(json.dumps(entry) + "\n")
+                    else:
+                        self.logger.warning(f"Failed to encode file: {file_path}")
+        except Exception:
+            # Clean up on error
+            if batch_file_path.exists():
+                batch_file_path.unlink()
+            raise
+
+        return batch_file_path
+
+    def _encode_file_to_data_url(self, file_path: pathlib.Path) -> Optional[str]:
+        """Convert file to base64 data URL.
+
+        Args:
+            file_path: Path to the file to encode
+
+        Returns:
+            Base64 data URL string or None if encoding fails
+        """
+        try:
+            with open(file_path, "rb") as f:
+                file_data = f.read()
+
+            encoded = base64.b64encode(file_data).decode("utf-8")
+
+            # Determine MIME type based on file extension
+            mime_type, _ = mimetypes.guess_type(str(file_path))
+            if not mime_type:
+                # Default MIME types for supported extensions
+                ext = file_path.suffix.lower()
+                if ext in {".png"}:
+                    mime_type = "image/png"
+                elif ext in {".jpg", ".jpeg"}:
+                    mime_type = "image/jpeg"
+                elif ext == ".pdf":
+                    mime_type = "application/pdf"
+                else:
+                    mime_type = "application/octet-stream"
+
+            return f"data:{mime_type};base64,{encoded}"
+
+        except Exception as e:
+            self.logger.error(f"Error encoding {file_path}: {e}")
+            return None
 
     def check_job_status(self, job_id: str) -> str:
         """Check the status of a submitted job.
@@ -321,14 +406,14 @@ class MistralOCRClient:
         try:
             batch_job = self.client.batch.jobs.get(job_id=job_id)
 
-            if not batch_job.output_file_id:
+            if not batch_job.output_file:
                 return []
 
             # Download the output file
-            output_response = self.client.files.download(file_id=batch_job.output_file_id)
+            output_response = self.client.files.download(file_id=batch_job.output_file)
             output_content = output_response.content.decode("utf-8")
 
-            # Parse the results (assuming JSONL format)
+            # Parse the results (JSONL format from batch API)
             results = []
             for line in output_content.strip().split("\n"):
                 if line.strip():
@@ -336,22 +421,37 @@ class MistralOCRClient:
                         result_data = json.loads(line)
                         if "response" in result_data and "body" in result_data["response"]:
                             response_body = result_data["response"]["body"]
-                            if "choices" in response_body and response_body["choices"]:
-                                choice = response_body["choices"][0]
-                                if "message" in choice and "content" in choice["message"]:
-                                    content = choice["message"]["content"]
 
-                                    # Extract file name from custom_id if available
-                                    file_name = result_data.get("custom_id", "unknown")
+                            # The OCR API returns the extracted text directly
+                            if "text" in response_body:
+                                text_content = response_body["text"]
+                                markdown_content = response_body.get("markdown", text_content)
+                            elif "content" in response_body:
+                                text_content = response_body["content"]
+                                markdown_content = text_content
+                            else:
+                                # Fallback to look for choices format
+                                if "choices" in response_body and response_body["choices"]:
+                                    choice = response_body["choices"][0]
+                                    if "message" in choice and "content" in choice["message"]:
+                                        text_content = choice["message"]["content"]
+                                        markdown_content = text_content
+                                    else:
+                                        continue
+                                else:
+                                    continue
 
-                                    results.append(
-                                        OCRResult(
-                                            text=content,
-                                            markdown=content,  # Assuming content is already in markdown
-                                            file_name=file_name,
-                                            job_id=job_id,
-                                        )
-                                    )
+                            # Extract file name from custom_id if available
+                            file_name = result_data.get("custom_id", "unknown")
+
+                            results.append(
+                                OCRResult(
+                                    text=text_content,
+                                    markdown=markdown_content,
+                                    file_name=file_name,
+                                    job_id=job_id,
+                                )
+                            )
                     except json.JSONDecodeError:
                         self.logger.warning(f"Failed to parse result line: {line}")
                         continue
@@ -424,4 +524,3 @@ class MistralOCRClient:
             # Still create the directory for test compatibility
             job_dir.mkdir(parents=True, exist_ok=True)
             raise RuntimeError(error_msg)
-
