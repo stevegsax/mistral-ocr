@@ -93,6 +93,12 @@ Track and manage your OCR jobs:
 # Check the status of a specific job
 uv run python -m mistral_ocr --check-job job_001
 
+# List all jobs with their status
+uv run python -m mistral_ocr --list-jobs
+
+# Show detailed status for a specific job (includes API response details)
+uv run python -m mistral_ocr --job-status job_001
+
 # Query all jobs associated with a document name
 uv run python -m mistral_ocr --query-document "Annual_Report"
 
@@ -113,6 +119,9 @@ uv run python -m mistral_ocr --download-results job_001
 
 # Download results to a specific directory
 uv run python -m mistral_ocr --download-results job_001 --download-to /path/to/save/results/
+
+# Download all results for a document by name or UUID
+uv run python -m mistral_ocr --download-document "Annual_Report" --download-to /path/to/save/
 ```
 
 ### Advanced Examples
@@ -128,10 +137,14 @@ uv run python -m mistral_ocr --submit /archive/legal_documents/ --recursive \
 uv run python -m mistral_ocr --submit contract.pdf --document-name "Contract_Review"
 # Note the returned job ID, then:
 uv run python -m mistral_ocr --check-job job_002
+uv run python -m mistral_ocr --job-status job_002  # Get detailed status information
 uv run python -m mistral_ocr --download-results job_002 --download-to ./processed_contracts/
 
 # Monitor document processing status
 uv run python -m mistral_ocr --query-document "Contract_Review"
+
+# List all jobs and their current status
+uv run python -m mistral_ocr --list-jobs
 ```
 
 ## Supported File Types
