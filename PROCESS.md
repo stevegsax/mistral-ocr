@@ -21,7 +21,7 @@ Each user story or feature follows this iterative cycle:
 - Review `specs/01_REQUIREMENTS.md` to identify the next user story
 - Break the story into tasks completable in 1-2 days maximum
 - Define clear acceptance criteria as executable behaviors
-- Update `specs/02_TODO.md` with specific, testable tasks
+- Propose updates to `specs/02_TODO.md` with specific, testable tasks and await User approval
 - Each task should have: ID, status (NOT_STARTED/IN_PROGRESS/DONE), and description
 
 **Quality Gate**: Story is small enough to complete in one cycle
@@ -58,7 +58,7 @@ Each user story or feature follows this iterative cycle:
 - Check code quality: `ruff check` and `ruff format`
 - Verify type safety: `mypy src/`
 - Test CLI manually for user experience
-- Update documentation if interfaces changed
+- Propose documentation updates if interfaces changed and await User approval
 
 **Quality Gate**: All quality checks pass and feature works end-to-end
 
@@ -66,9 +66,9 @@ Each user story or feature follows this iterative cycle:
 
 **Goal**: Learn and adapt for the next cycle
 
-- Mark completed tasks as DONE in `specs/02_TODO.md`
-- Update architectural docs (`specs/03_ARCHITECTURE.md`) if design evolved
-- Document any new insights or changed assumptions
+- Suggest marking completed tasks as DONE in `specs/02_TODO.md` and await User approval
+- Propose updates to architectural docs (`specs/03_ARCHITECTURE.md`) if design evolved and await User approval
+- Document any new insights or changed assumptions only after User approval
 - Plan the next smallest valuable increment
 - Identify dependencies or blockers for upcoming work
 
@@ -77,9 +77,10 @@ Each user story or feature follows this iterative cycle:
 ## Documentation Strategy
 
 ### Living Documentation
-- Update specs to reflect actual implementation, not planned implementation
-- Keep architecture docs current with real system design
-- Document design decisions and their rationale
+- **NEVER update specs without explicit User approval**
+- Suggest spec updates to User and await their approval before making changes
+- When implementation differs from specs, propose changes rather than making them
+- Document design decisions and their rationale only after User approval
 
 ### Spec Files Organization
 - `specs/01_REQUIREMENTS.md`: User stories and acceptance criteria
