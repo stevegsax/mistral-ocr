@@ -232,3 +232,9 @@ uv run python -m mistral_ocr --help
 - Use `ruff` to lint or reformat
 - Install the package with `uv pip install -e .`
 - Run the command line program with `uv run python -m mistral_ocr`
+
+## Reference Documentation
+
+- The OpenAPI specification for the MistralAI API can be found in `examples/plugin-redoc-0.yaml`.
+- A working example that calls the MistralAI API can be found in `examples/main.py`.
+
