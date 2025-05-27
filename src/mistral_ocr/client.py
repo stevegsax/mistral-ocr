@@ -307,7 +307,7 @@ class MistralOCRClient:
 
         try:
             batch_job = self.client.batch.jobs.get(job_id=job_id)
-            status = batch_job.status.value
+            status = batch_job.status if isinstance(batch_job.status, str) else batch_job.status.value
 
             # Update status in database
             self.db.update_job_status(job_id, status)
@@ -362,7 +362,8 @@ class MistralOCRClient:
 
         try:
             cancelled_job = self.client.batch.jobs.cancel(job_id=job_id)
-            success = cancelled_job.status.value == "cancelled"
+            status = cancelled_job.status if isinstance(cancelled_job.status, str) else cancelled_job.status.value
+            success = status == "cancelled"
 
             if success:
                 self.db.update_job_status(job_id, "cancelled")
