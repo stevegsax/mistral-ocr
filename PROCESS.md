@@ -15,6 +15,19 @@
 - Ask clarifying questions if necessary.
 - Capture the desired functionality and goals.
 - Document assumptions, constraints, and open questions.
+
+### 2. Update the TODO List
+
+- Carefully review the current requirements and the set of tasks defined in 'specs/02_TODO.md'. Create this file if it does not already exist.
+- Enumerate the tasks required to build the featues described in the product document.
+    - Each task should be numbered (zero padded to three digits), have a completion checkbox, a status value, and a description. Statuses will be one of "NOT_STARTED", "MOCKUP", "ERROR", "DONE" as described below.
+        - For example: `023. - [ ] NOT_STARTED Logging output should be saved to XDG_STATUS_DIR`. 
+- List everything that will be built, starting with most basic and proceeding to most complex.
+- Based on the current status of the program and tests, mark each requirement as:
+    - "NOT_STARTED" if this feature 
+    - "MOCKUP" if this feature has only been designed to the mockup test stage.
+    - "ERROR" if the feature has tests but the tests fail.
+    - "DONE" if this feature has been fully implemented and all tests pass.
 - Merge requirement analysis into file `specs/01_REQUIREMENTS.md`. Create this file if it does not alrady exist.
 
 ### 2. Architectural Analysis
