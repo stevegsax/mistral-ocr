@@ -608,29 +608,42 @@ class MistralOCRClient:
         
         if not self.mock_mode:
             # In real mode, refresh status from Mistral API
-            self.logger.info(f"Refreshing status for {len(jobs)} jobs from Mistral API")
+            # Skip API calls for jobs that won't change: SUCCESS (final) and pending (not started)
+            skip_statuses = {"SUCCESS", "pending"}
+            jobs_to_refresh = [job for job in jobs if job['status'] not in skip_statuses]
+            skipped_count = len(jobs) - len(jobs_to_refresh)
             
-            updated_count = 0
-            for job in jobs:
-                job_id = job['id']
-                try:
-                    # Fetch live status from API (this updates database via check_job_status)
-                    current_status = self.check_job_status(job_id)
-                    
-                    # Update job status if it changed
-                    if current_status != job['status']:
-                        old_status = job['status']
-                        msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
-                        self.logger.debug(msg)
-                        job['status'] = current_status  # Update in-memory for immediate display
-                        updated_count += 1
+            if skipped_count > 0:
+                msg = f"Skipping API refresh for {skipped_count} jobs with final/pending status"
+                self.logger.debug(msg)
+            
+            if jobs_to_refresh:
+                count = len(jobs_to_refresh)
+                self.logger.info(f"Refreshing status for {count} jobs from Mistral API")
+                
+                updated_count = 0
+                for job in jobs_to_refresh:
+                    job_id = job['id']
+                    try:
+                        # Fetch live status from API (this updates database via check_job_status)
+                        current_status = self.check_job_status(job_id)
                         
-                except Exception as e:
-                    self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
-                    # Keep existing status from database
-                    
-            if updated_count > 0:
-                self.logger.info(f"Updated status for {updated_count} jobs")
+                        # Update job status if it changed
+                        if current_status != job['status']:
+                            old_status = job['status']
+                            msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
+                            self.logger.debug(msg)
+                            job['status'] = current_status  # Update in-memory for immediate display
+                            updated_count += 1
+                            
+                    except Exception as e:
+                        self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
+                        # Keep existing status from database
+                        
+                if updated_count > 0:
+                    self.logger.info(f"Updated status for {updated_count} jobs")
+            else:
+                self.logger.debug("No jobs require status refresh")
         
         return jobs
 

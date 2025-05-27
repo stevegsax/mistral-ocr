@@ -309,7 +309,7 @@ class TestJobStatusListing:
         # Create a test job with stale status in database
         test_doc_uuid = "test-doc-uuid-refresh"
         client.db.store_document(test_doc_uuid, "Test Document")
-        client.db.store_job("test_job_refresh", test_doc_uuid, "pending", 1)
+        client.db.store_job("test_job_refresh", test_doc_uuid, "running", 1)  # Use "running" status
         
         # Mock the check_job_status method to return updated status
         original_method = client.check_job_status
@@ -327,6 +327,45 @@ class TestJobStatusListing:
         refresh_job = next((job for job in jobs if job['id'] == 'test_job_refresh'), None)
         assert refresh_job is not None
         assert refresh_job['status'] == 'completed'
+
+    def test_list_jobs_skips_final_and_pending_jobs(self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path) -> None:
+        """Test that list jobs skips API calls for SUCCESS and pending jobs."""
+        # Create a client that uses the same temporary data directory as the CLI
+        from mistral_ocr.client import MistralOCRClient
+        
+        # Create client in real mode (not test mode)
+        client = MistralOCRClient(api_key="real-api-key")
+        client.mock_mode = False  # Force real mode for this test
+        
+        # Create test jobs with different statuses
+        test_doc_uuid = "test-doc-uuid-skip"
+        client.db.store_document(test_doc_uuid, "Test Document")
+        client.db.store_job("job_success", test_doc_uuid, "SUCCESS", 1)
+        client.db.store_job("job_pending", test_doc_uuid, "pending", 1)  
+        client.db.store_job("job_running", test_doc_uuid, "running", 1)
+        
+        # Mock the check_job_status method to track which jobs are checked
+        api_calls = []
+        original_method = client.check_job_status
+        def mock_check_status(job_id):
+            api_calls.append(job_id)
+            return original_method(job_id)
+        
+        client.check_job_status = mock_check_status
+        
+        # Call list_all_jobs - should only refresh running job
+        jobs = client.list_all_jobs()
+        
+        # Verify only the running job was checked via API
+        assert "job_running" in api_calls
+        assert "job_success" not in api_calls  # Should be skipped
+        assert "job_pending" not in api_calls  # Should be skipped
+        
+        # Verify all jobs are still returned
+        job_ids = {job['id'] for job in jobs}
+        assert "job_success" in job_ids
+        assert "job_pending" in job_ids
+        assert "job_running" in job_ids
 
 
 # Advanced Options and CLI Tests
