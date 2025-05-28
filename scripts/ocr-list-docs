@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+sqlite3 ${XDG_STATE_HOME}/mistral-ocr/mistral_ocr.db <<EOF
+
+select distinct name 
+from documents 
+order by name;
+
+EOF

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+curl -X GET "https://api.mistral.ai/v1/batch/jobs" \
+  -H "Authorization: Bearer $MISTRAL_API_KEY" \
+  -H "Content-Type: application/json"

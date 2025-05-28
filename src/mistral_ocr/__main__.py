@@ -2,12 +2,17 @@ import argparse
 import pathlib
 import sys
 
+from mistral_ocr._version import __version__
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="mistral-ocr", description="Submit OCR batches to the Mistral API"
     )
 
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     parser.add_argument("--submit", type=str, help="Submit a file or directory for OCR processing")
     parser.add_argument("--recursive", action="store_true", help="Process directories recursively")
     parser.add_argument("--document-name", type=str, help="Associate files with a document name")

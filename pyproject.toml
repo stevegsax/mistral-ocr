@@ -12,6 +12,9 @@ dependencies = [
     "structlog>=25.3.0",
 ]
 
+[project.scripts]
+mistral-ocr="mistral_ocr.__main__:main"
+
 [project.optional-dependencies]
 dev = ["pytest", "mypy", "ruff"]
 

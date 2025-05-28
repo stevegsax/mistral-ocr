@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+# Read from stdin line by line
+while IFS= read -r line; do
+  echo
+  echo 
+  echo "$line"
+  echo 
+  echo 
+done

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# The MistralAI OCR process does not always leave a newline at the
+# end of the output file. When concatenating, we stick a few extra
+# blanks to ensure the files don't run together. This sometimes has
+# the effect of breaking a paragraph that spans pages.
+
+for file in ${XDG_DATA_HOME}/mistral-ocr/life-drawing-2/*.txt; do
+    (printf '\n'; cat "$file")
+done > /tmp/concat.txt
+
+

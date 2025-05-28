@@ -91,6 +91,12 @@ class TestBasicIntegrity:
         assert result.returncode == 0
         assert "usage" in result.stdout.lower()
 
+    def test_version_command(self) -> None:
+        result = run_cli("--version")
+        assert result.returncode == 0
+        assert "mistral-ocr" in result.stdout
+        assert "0.1.0" in result.stdout
+
     def test_configuration_availability(self) -> None:
         config = ConfigurationManager()
         assert config is not None

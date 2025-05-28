@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+cat /tmp/mistral-batches.json \
+    | jq -r '.data[] | [.id, .status, .total_requests, .completed_requests, .succeeded_requests, .failed_requests] | @tsv'
+
