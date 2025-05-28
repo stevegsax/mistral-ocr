@@ -66,6 +66,7 @@ class DocumentInfo:
     uuid: str
     name: str
     created_at: str
+    downloaded: bool = False
 
 
 @dataclass(config=ConfigDict(extra='forbid'))

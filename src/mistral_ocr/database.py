@@ -39,7 +39,8 @@ class Database:
             CREATE TABLE IF NOT EXISTS documents (
                 uuid TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                downloaded BOOLEAN DEFAULT FALSE
             )
         """)
 
@@ -119,6 +120,13 @@ class Database:
                 pass
         except sqlite3.OperationalError:
             pass
+        
+        # Add downloaded column to documents table if it doesn't exist
+        try:
+            cursor.execute("SELECT downloaded FROM documents LIMIT 1")
+        except sqlite3.OperationalError:
+            # Column doesn't exist, add it
+            cursor.execute("ALTER TABLE documents ADD COLUMN downloaded BOOLEAN DEFAULT FALSE")
             
         self.connection.commit()
 
@@ -168,12 +176,36 @@ class Database:
             raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
+        # Use INSERT OR IGNORE to preserve existing downloaded status
         cursor.execute(
             """
-            INSERT OR REPLACE INTO documents (uuid, name) 
-            VALUES (?, ?)
+            INSERT OR IGNORE INTO documents (uuid, name, downloaded) 
+            VALUES (?, ?, FALSE)
         """,
             (uuid, name),
+        )
+        # Update name if document already exists (but preserve downloaded status)
+        cursor.execute(
+            """
+            UPDATE documents SET name = ? WHERE uuid = ?
+        """,
+            (name, uuid),
+        )
+        self.connection.commit()
+
+    @require_database_connection
+    def mark_document_downloaded(self, document_uuid: str) -> None:
+        """Mark a document as downloaded.
+
+        Args:
+            document_uuid: Document UUID to mark as downloaded
+        """
+        cursor = self.connection.cursor()
+        cursor.execute(
+            """
+            UPDATE documents SET downloaded = TRUE WHERE uuid = ?
+        """,
+            (document_uuid,),
         )
         self.connection.commit()
 

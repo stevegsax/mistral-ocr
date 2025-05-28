@@ -354,7 +354,7 @@ class TestJobStatusListing:
             "a1b2c3d4-e5f6-7890-abcd-ef1234567890", test_doc_uuid, "running", 1
         )  # Use UUID-like production job ID
 
-        # Mock the Mistral API client to return updated status
+        # Mock the Mistral API batch jobs list endpoint to return updated status
         mock_api_job = Mock()
         mock_api_job.id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         mock_api_job.status = "completed"
@@ -362,8 +362,11 @@ class TestJobStatusListing:
         mock_api_job.completed_at = "2024-01-01T10:05:00Z"
         mock_api_job.total_requests = 1
 
-        with patch.object(client.client.batch.jobs, 'get', return_value=mock_api_job):
-            # Call list_all_jobs - should refresh from API
+        mock_response = Mock()
+        mock_response.data = [mock_api_job]
+
+        with patch.object(client.client.batch.jobs, 'list', return_value=mock_response):
+            # Call list_all_jobs - should refresh from API using batch list call
             jobs = client.list_all_jobs()
 
             # Verify the job status was updated
@@ -373,10 +376,10 @@ class TestJobStatusListing:
             assert refresh_job is not None
             assert refresh_job["status"] == "completed"
 
-    def test_list_jobs_skips_final_and_pending_jobs(
+    def test_list_jobs_uses_batch_api_efficiently(
         self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
     ) -> None:
-        """Test that list jobs skips API calls for SUCCESS and pending jobs."""
+        """Test that list jobs uses efficient batch API call instead of individual calls."""
         from mistral_ocr.client import MistralOCRClient
         from unittest.mock import Mock, patch
 
@@ -385,37 +388,57 @@ class TestJobStatusListing:
         client.mock_mode = False  # Force real mode for this test
 
         # Create realistic jobs with different statuses
-        real_doc_uuid = "real-doc-uuid-skip"
+        real_doc_uuid = "real-doc-uuid-batch"
         client.database.store_document(real_doc_uuid, "Real Document")
         client.database.store_job("b2c3d4e5-f6a7-8901-bcde-f23456789012", real_doc_uuid, "SUCCESS", 1)
         client.database.store_job("c3d4e5f6-a7b8-9012-cdef-345678901234", real_doc_uuid, "pending", 1)
         client.database.store_job("d4e5f6a7-b8c9-0123-defa-456789012345", real_doc_uuid, "running", 1)
 
-        # Mock the Mistral API client to track which jobs are accessed
-        api_calls = []
-        
-        def mock_get_job(job_id):
-            api_calls.append(job_id)
+        # Mock API jobs with updated statuses
+        mock_jobs = []
+        for job_id, status in [
+            ("b2c3d4e5-f6a7-8901-bcde-f23456789012", "SUCCESS"),
+            ("c3d4e5f6-a7b8-9012-cdef-345678901234", "SUCCESS"),  # Updated from pending
+            ("d4e5f6a7-b8c9-0123-defa-456789012345", "SUCCESS")   # Updated from running
+        ]:
             mock_job = Mock()
             mock_job.id = job_id
-            mock_job.status = "completed" if job_id == "d4e5f6a7-b8c9-0123-defa-456789012345" else "running"
+            mock_job.status = status
             mock_job.created_at = "2024-01-01T10:00:00Z"
-            return mock_job
+            mock_job.completed_at = "2024-01-01T10:05:00Z"
+            mock_job.total_requests = 1
+            mock_jobs.append(mock_job)
 
-        with patch.object(client.client.batch.jobs, 'get', side_effect=mock_get_job):
-            # Call list_all_jobs - should only refresh running job
+        mock_response = Mock()
+        mock_response.data = mock_jobs
+        
+        list_call_count = 0
+        def mock_list():
+            nonlocal list_call_count
+            list_call_count += 1
+            return mock_response
+
+        with patch.object(client.client.batch.jobs, 'list', side_effect=mock_list):
+            # Call list_all_jobs - should use single batch API call
             jobs = client.list_all_jobs()
 
-            # Verify only the running job was checked via API (not final/pending)
-            assert "d4e5f6a7-b8c9-0123-defa-456789012345" in api_calls
-            assert "b2c3d4e5-f6a7-8901-bcde-f23456789012" not in api_calls  # Should be skipped
-            assert "c3d4e5f6-a7b8-9012-cdef-345678901234" not in api_calls  # Should be skipped
+            # Verify only ONE batch API call was made (efficient!)
+            assert list_call_count == 1
+
+            # Verify all jobs were updated, including pending jobs
+            pending_job = next((job for job in jobs if job["id"] == "c3d4e5f6-a7b8-9012-cdef-345678901234"), None)
+            running_job = next((job for job in jobs if job["id"] == "d4e5f6a7-b8c9-0123-defa-456789012345"), None)
+            
+            assert pending_job is not None
+            assert pending_job["status"] == "SUCCESS"  # Updated from pending
+            assert running_job is not None  
+            assert running_job["status"] == "SUCCESS"  # Updated from running
 
             # Verify all jobs are still returned
             job_ids = {job["id"] for job in jobs}
-        assert "b2c3d4e5-f6a7-8901-bcde-f23456789012" in job_ids
-        assert "c3d4e5f6-a7b8-9012-cdef-345678901234" in job_ids
-        assert "d4e5f6a7-b8c9-0123-defa-456789012345" in job_ids
+            assert "b2c3d4e5-f6a7-8901-bcde-f23456789012" in job_ids
+            assert "c3d4e5f6-a7b8-9012-cdef-345678901234" in job_ids
+            assert "d4e5f6a7-b8c9-0123-defa-456789012345" in job_ids
 
     def test_list_jobs_hides_test_jobs_in_real_mode(
         self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path

@@ -272,6 +272,22 @@ class ResultManager:
 
         if not completed_jobs:
             raise ResultNotAvailableError(f"No results could be downloaded for document {document_identifier}")
+        
+        # Mark document as downloaded if we have successfully completed jobs
+        if completed_jobs:
+            # Get document UUID (document_identifier could be name or UUID)
+            try:
+                # Try to get UUID if identifier is a name
+                document_uuid = self.database.get_recent_document_by_name(document_identifier)
+                if not document_uuid:
+                    # Assume identifier is already a UUID
+                    document_uuid = document_identifier
+                
+                if document_uuid:
+                    self.database.mark_document_downloaded(document_uuid)
+                    self.logger.debug(f"Marked document {document_uuid} as downloaded")
+            except Exception as e:
+                self.logger.warning(f"Failed to mark document as downloaded: {e}")
 
     def _process_jobs_sequential(self, job_ids: List[str], destination: pathlib.Path, 
                                job_manager: Optional['BatchJobManager']) -> tuple:
