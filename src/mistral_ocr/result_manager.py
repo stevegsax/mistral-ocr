@@ -92,7 +92,7 @@ class ResultManager:
         else:
             # Fallback: create a temporary job manager (less ideal due to circular import risk)
             from .batch_job_manager import BatchJobManager
-            temp_job_manager = BatchJobManager(self.db, self.client, self.logger, self.mock_mode)
+            temp_job_manager = BatchJobManager(self.database, self.client, self.logger, self.mock_mode)
             status = temp_job_manager.check_job_status(job_id)
 
         if status.upper() not in ["SUCCESS", "COMPLETED", "SUCCEEDED"]:
