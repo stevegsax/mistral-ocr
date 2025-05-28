@@ -16,10 +16,10 @@ class DocumentManager:
             database: Database instance for document storage
             logger: Logger instance for logging operations
         """
-        self.db = database
+        self.database = database
         self.logger = logger
     
-    def resolve_document(
+    def resolve_document_uuid_and_name(
         self, document_name: Optional[str], document_uuid: Optional[str]
     ) -> Tuple[str, str]:
         """Resolve document UUID and name for job association.
@@ -35,12 +35,12 @@ class DocumentManager:
             self.logger.info(f"Using existing document UUID: {document_uuid}")
             # Use existing UUID, generate name if not provided
             resolved_name = document_name or f"Document_{document_uuid[:8]}"
-            self.db.store_document(document_uuid, resolved_name)
+            self.database.store_document(document_uuid, resolved_name)
             return document_uuid, resolved_name
 
         if document_name:
             # Check if we should append to an existing document or create new one
-            existing_uuid = self.db.get_recent_document_by_name(document_name)
+            existing_uuid = self.database.get_recent_document_by_name(document_name)
             if existing_uuid:
                 self.logger.info(
                     f"Appending to existing document '{document_name}' (UUID: {existing_uuid})"
@@ -49,12 +49,12 @@ class DocumentManager:
             else:
                 new_uuid = str(uuid.uuid4())
                 self.logger.info(f"Creating new document '{document_name}' (UUID: {new_uuid})")
-                self.db.store_document(new_uuid, document_name)
+                self.database.store_document(new_uuid, document_name)
                 return new_uuid, document_name
 
         # Generate both UUID and name
         new_uuid = str(uuid.uuid4())
         generated_name = f"Document_{new_uuid[:8]}"
         self.logger.info(f"Creating new document '{generated_name}' (UUID: {new_uuid})")
-        self.db.store_document(new_uuid, generated_name)
+        self.database.store_document(new_uuid, generated_name)
         return new_uuid, generated_name

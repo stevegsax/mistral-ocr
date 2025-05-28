@@ -18,8 +18,8 @@ class BatchSubmissionManager:
     """Manages OCR batch submission operations."""
     
     # Mock state counters for testing
-    _mock_job_counter = 0
-    _mock_file_counter = 0
+    _mock_job_sequence_number = 0
+    _mock_file_sequence_number = 0
     
     def __init__(self, database: Database, api_client, document_manager: DocumentManager,
                  file_collector: FileCollector, logger, mock_mode: bool = False) -> None:
@@ -33,7 +33,7 @@ class BatchSubmissionManager:
             logger: Logger instance for logging operations
             mock_mode: Whether to use mock mode for testing
         """
-        self.db = database
+        self.database = database
         self.client = api_client
         self.document_manager = document_manager
         self.file_collector = file_collector
@@ -52,33 +52,33 @@ class BatchSubmissionManager:
         """
         return [files[i : i + max_batch_size] for i in range(0, len(files), max_batch_size)]
     
-    def _submit_mock_batch(self, batch_files: List[pathlib.Path], doc_uuid: str) -> str:
+    def _submit_mock_batch(self, batch_files: List[pathlib.Path], document_uuid: str) -> str:
         """Submit a mock batch for testing.
         
         Args:
             batch_files: Files in the batch
-            doc_uuid: Document UUID for association
+            document_uuid: Document UUID for association
             
         Returns:
             Mock job ID
         """
-        BatchSubmissionManager._mock_job_counter += 1
-        job_id = f"job_{BatchSubmissionManager._mock_job_counter:03d}"
+        BatchSubmissionManager._mock_job_sequence_number += 1
+        job_id = f"job_{BatchSubmissionManager._mock_job_sequence_number:03d}"
 
         # Mock file uploads
         for file_path in batch_files:
-            BatchSubmissionManager._mock_file_counter += 1
-            file_id = f"file_{BatchSubmissionManager._mock_file_counter:03d}"
-            self.db.store_page(str(file_path), doc_uuid, file_id)
+            BatchSubmissionManager._mock_file_sequence_number += 1
+            file_id = f"file_{BatchSubmissionManager._mock_file_sequence_number:03d}"
+            self.database.store_page(str(file_path), document_uuid, file_id)
             
         return job_id
     
-    def _submit_real_batch(self, batch_files: List[pathlib.Path], doc_uuid: str, model: str) -> str:
+    def _submit_real_batch(self, batch_files: List[pathlib.Path], document_uuid: str, model: str) -> str:
         """Submit a real batch to the Mistral API.
         
         Args:
             batch_files: Files in the batch
-            doc_uuid: Document UUID for association
+            document_uuid: Document UUID for association
             model: OCR model to use
             
         Returns:
@@ -112,7 +112,7 @@ class BatchSubmissionManager:
 
             # Store page metadata
             for file_path in batch_files:
-                self.db.store_page(str(file_path), doc_uuid, batch_upload.id)
+                self.database.store_page(str(file_path), document_uuid, batch_upload.id)
                 
             return job_id
 
@@ -125,14 +125,14 @@ class BatchSubmissionManager:
                 )
     
     def _process_single_batch(self, batch_idx: int, total_batches: int, 
-                            batch_files: List[pathlib.Path], doc_uuid: str, model: str) -> str:
+                            batch_files: List[pathlib.Path], document_uuid: str, model: str) -> str:
         """Process a single batch of files.
         
         Args:
             batch_idx: Current batch index (1-based)
             total_batches: Total number of batches
             batch_files: Files in this batch
-            doc_uuid: Document UUID for association
+            document_uuid: Document UUID for association
             model: OCR model to use
             
         Returns:
@@ -147,12 +147,12 @@ class BatchSubmissionManager:
         
         try:
             if self.mock_mode:
-                job_id = self._submit_mock_batch(batch_files, doc_uuid)
+                job_id = self._submit_mock_batch(batch_files, document_uuid)
             else:
-                job_id = self._submit_real_batch(batch_files, doc_uuid, model)
+                job_id = self._submit_real_batch(batch_files, document_uuid, model)
 
             # Store job metadata
-            self.db.store_job(job_id, doc_uuid, "pending", len(batch_files))
+            self.database.store_job(job_id, document_uuid, "pending", len(batch_files))
             self.logger.info(
                 f"Stored job metadata for job {job_id} with {len(batch_files)} files"
             )
@@ -190,10 +190,10 @@ class BatchSubmissionManager:
             ValueError: If any file has an unsupported file type
         """
         # Collect and validate files
-        actual_files = self.file_collector.collect_files(files, recursive)
+        actual_files = self.file_collector.gather_valid_files_for_processing(files, recursive)
 
         # Handle document creation/association
-        doc_uuid, resolved_document_name = self.document_manager.resolve_document(
+        document_uuid, resolved_document_name = self.document_manager.resolve_document_uuid_and_name(
             document_name, document_uuid
         )
 
@@ -210,7 +210,7 @@ class BatchSubmissionManager:
         job_ids = []
         for batch_idx, batch_files in enumerate(batches, 1):
             job_id = self._process_single_batch(
-                batch_idx, len(batches), batch_files, doc_uuid, ocr_model
+                batch_idx, len(batches), batch_files, document_uuid, ocr_model
             )
             job_ids.append(job_id)
 

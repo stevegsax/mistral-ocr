@@ -238,7 +238,7 @@ class TestResultRetrieval:
     def test_retrieve_before_completion(self, client: MistralOCRClient) -> None:
         # Reset mock counter to ensure predictable behavior
         from mistral_ocr.result_manager import ResultManager
-        ResultManager._mock_results_call_count = 0
+        ResultManager._mock_get_results_call_count = 0
         
         # First call returns empty results, second call raises exception (mock behavior)
         client.get_results("job123")
@@ -334,8 +334,8 @@ class TestJobStatusListing:
 
         # Create a realistic job with stale status in database
         test_doc_uuid = "real-doc-uuid-refresh"
-        client.db.store_document(test_doc_uuid, "Real Document")
-        client.db.store_job(
+        client.database.store_document(test_doc_uuid, "Real Document")
+        client.database.store_job(
             "a1b2c3d4-e5f6-7890-abcd-ef1234567890", test_doc_uuid, "running", 1
         )  # Use UUID-like production job ID
 
@@ -372,10 +372,10 @@ class TestJobStatusListing:
 
         # Create realistic jobs with different statuses
         real_doc_uuid = "real-doc-uuid-skip"
-        client.db.store_document(real_doc_uuid, "Real Document")
-        client.db.store_job("b2c3d4e5-f6a7-8901-bcde-f23456789012", real_doc_uuid, "SUCCESS", 1)
-        client.db.store_job("c3d4e5f6-a7b8-9012-cdef-345678901234", real_doc_uuid, "pending", 1)
-        client.db.store_job("d4e5f6a7-b8c9-0123-defa-456789012345", real_doc_uuid, "running", 1)
+        client.database.store_document(real_doc_uuid, "Real Document")
+        client.database.store_job("b2c3d4e5-f6a7-8901-bcde-f23456789012", real_doc_uuid, "SUCCESS", 1)
+        client.database.store_job("c3d4e5f6-a7b8-9012-cdef-345678901234", real_doc_uuid, "pending", 1)
+        client.database.store_job("d4e5f6a7-b8c9-0123-defa-456789012345", real_doc_uuid, "running", 1)
 
         # Mock the check_job_status method to track which jobs are checked
         api_calls = []
@@ -414,16 +414,16 @@ class TestJobStatusListing:
         # Create a mix of real and test jobs
         test_doc_uuid = "test-doc-uuid-filter"
         real_doc_uuid = "real-doc-uuid"
-        client.db.store_document(test_doc_uuid, "Test Document")
-        client.db.store_document(real_doc_uuid, "Real Document")
+        client.database.store_document(test_doc_uuid, "Test Document")
+        client.database.store_document(real_doc_uuid, "Real Document")
 
         # Add test jobs (should be filtered out)
-        client.db.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
-        client.db.store_job("test_job_example", test_doc_uuid, "pending", 1)
-        client.db.store_job("job123", test_doc_uuid, "completed", 1)
+        client.database.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
+        client.database.store_job("test_job_example", test_doc_uuid, "pending", 1)
+        client.database.store_job("job123", test_doc_uuid, "completed", 1)
 
         # Add production job (should be shown) - use UUID-like pattern
-        client.db.store_job("f47ac10b-58cc-4372-a567-0e02b2c3d479", real_doc_uuid, "SUCCESS", 1)
+        client.database.store_job("f47ac10b-58cc-4372-a567-0e02b2c3d479", real_doc_uuid, "SUCCESS", 1)
 
         # Mock check_job_status to avoid actual API calls
         def mock_check_status(job_id):
@@ -455,9 +455,9 @@ class TestJobStatusListing:
 
         # Create test jobs
         test_doc_uuid = "test-doc-uuid-mock"
-        client.db.store_document(test_doc_uuid, "Test Document")
-        client.db.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
-        client.db.store_job("test_job_example", test_doc_uuid, "pending", 1)
+        client.database.store_document(test_doc_uuid, "Test Document")
+        client.database.store_job("job_001", test_doc_uuid, "SUCCESS", 1)
+        client.database.store_job("test_job_example", test_doc_uuid, "pending", 1)
 
         # Call list_all_jobs in mock mode - should show test jobs
         jobs = client.list_all_jobs()
@@ -481,8 +481,8 @@ class TestJobStatusListing:
 
         # Create a realistic job
         test_doc_uuid = "tracking-test-doc"
-        client.db.store_document(test_doc_uuid, "Tracking Test")
-        client.db.store_job("test-tracking-job", test_doc_uuid, "running", 1)
+        client.database.store_document(test_doc_uuid, "Tracking Test")
+        client.database.store_job("test-tracking-job", test_doc_uuid, "running", 1)
 
         # Mock the API call to return a job object
         class MockBatchJob:

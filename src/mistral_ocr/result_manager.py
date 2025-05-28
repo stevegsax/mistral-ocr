@@ -14,8 +14,8 @@ class ResultManager:
     """Manages OCR result retrieval and downloading."""
     
     # Mock state counters for testing
-    _mock_results_call_count = 0
-    _mock_download_call_count = 0
+    _mock_get_results_call_count = 0
+    _mock_download_results_call_count = 0
     
     def __init__(self, database: Database, api_client, result_parser: OCRResultParser, 
                  logger, mock_mode: bool = False) -> None:
@@ -28,7 +28,7 @@ class ResultManager:
             logger: Logger instance for logging operations
             mock_mode: Whether to use mock mode for testing
         """
-        self.db = database
+        self.database = database
         self.client = api_client
         self.result_parser = result_parser
         self.logger = logger
@@ -49,10 +49,10 @@ class ResultManager:
         """
         if self.mock_mode:
             # Mock implementation
-            ResultManager._mock_results_call_count += 1
+            ResultManager._mock_get_results_call_count += 1
 
             # For the second call, simulate "not completed" state
-            if ResultManager._mock_results_call_count == 2:
+            if ResultManager._mock_get_results_call_count == 2:
                 raise JobNotCompletedError(f"Job {job_id} is not yet completed")
 
             # Return empty results for tests
@@ -100,10 +100,10 @@ class ResultManager:
 
         if self.mock_mode:
             # Mock implementation for testing
-            ResultManager._mock_download_call_count += 1
+            ResultManager._mock_download_results_call_count += 1
 
             # For the second call, simulate unknown document storage
-            if ResultManager._mock_download_call_count == 2:
+            if ResultManager._mock_download_results_call_count == 2:
                 dir_name = "unknown"
             else:
                 dir_name = job_id
@@ -114,7 +114,7 @@ class ResultManager:
             return
 
         # Get document name for this job
-        doc_info = self.db.get_document_by_job(job_id)
+        doc_info = self.database.get_document_by_job(job_id)
         if doc_info:
             doc_name = doc_info[1].lower().replace(" ", "-")
         else:
@@ -161,7 +161,7 @@ class ResultManager:
         destination = XDGPaths.resolve_download_destination(destination)
 
         # Get all jobs for this document (by name or UUID)
-        job_ids = self.db.get_jobs_by_document_identifier(document_identifier)
+        job_ids = self.database.get_jobs_by_document_identifier(document_identifier)
 
         if not job_ids:
             error_msg = f"No jobs found for document: {document_identifier}"

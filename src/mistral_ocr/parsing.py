@@ -30,24 +30,24 @@ class OCRResultParser:
             List of parsed OCR results
         """
         self.logger.info(f"Downloaded output file, content length: {len(output_content)}")
-        results = []
+        parsed_results = []
 
-        for line in output_content.strip().split("\n"):
-            if line.strip():
+        for result_line in output_content.strip().split("\n"):
+            if result_line.strip():
                 try:
-                    result_data = json.loads(line)
-                    ocr_result = self._parse_single_result(result_data, job_id)
+                    result_data = json.loads(result_line)
+                    ocr_result = self._parse_individual_ocr_result(result_data, job_id)
                     if ocr_result:
-                        results.append(ocr_result)
+                        parsed_results.append(ocr_result)
                 except json.JSONDecodeError as e:
                     self.logger.warning(f"Failed to parse result line: {e}")
                 except Exception as e:
                     self.logger.error(f"Error processing result: {e}")
 
-        return results
+        return parsed_results
 
-    def _parse_single_result(self, result_data: Dict[str, Any], job_id: str) -> Optional[OCRResult]:
-        """Parse a single result from the batch output.
+    def _parse_individual_ocr_result(self, result_data: Dict[str, Any], job_id: str) -> Optional[OCRResult]:
+        """Parse an individual OCR result from the batch output.
 
         Args:
             result_data: Single result data from JSONL

@@ -20,7 +20,7 @@ class BatchJobManager:
             logger: Logger instance for logging operations
             mock_mode: Whether to use mock mode for testing
         """
-        self.db = database
+        self.database = database
         self.client = api_client
         self.logger = logger
         self.mock_mode = mock_mode
@@ -43,7 +43,7 @@ class BatchJobManager:
                 raise InvalidJobIdError(f"Invalid job ID: {job_id}")
 
             # Try to get from database first
-            job_details = self.db.get_job_details(job_id)
+            job_details = self.database.get_job_details(job_id)
             if job_details:
                 return job_details["status"]
 
@@ -73,12 +73,12 @@ class BatchJobManager:
                 api_response_json = json.dumps(api_response, default=str, indent=2)
                 
                 # Update database with API refresh information
-                self.db.update_job_api_refresh(job_id, status, api_response_json)
+                self.database.update_job_api_refresh(job_id, status, api_response_json)
                 
             except Exception as e:
                 self.logger.warning(f"Failed to serialize API response for job {job_id}: {e}")
                 # Fallback to basic status update
-                self.db.update_job_status(job_id, status)
+                self.database.update_job_status(job_id, status)
 
             return status
         except Exception as e:
@@ -100,14 +100,14 @@ class BatchJobManager:
         if self.mock_mode:
             # Mock implementation - always return True for test compatibility
             # Update status in database if job exists, otherwise create it
-            job_details = self.db.get_job_details(job_id)
+            job_details = self.database.get_job_details(job_id)
             if not job_details:
                 # Create a mock job entry for cancellation
                 mock_doc_uuid = "mock-doc-uuid"
-                self.db.store_document(mock_doc_uuid, "Mock Document")
-                self.db.store_job(job_id, mock_doc_uuid, "pending", 1)
+                self.database.store_document(mock_doc_uuid, "Mock Document")
+                self.database.store_job(job_id, mock_doc_uuid, "pending", 1)
 
-            self.db.update_job_status(job_id, "cancelled")
+            self.database.update_job_status(job_id, "cancelled")
             self.logger.info(f"Successfully cancelled job {job_id}")
             return True
 
@@ -121,7 +121,7 @@ class BatchJobManager:
             success = status == "cancelled"
 
             if success:
-                self.db.update_job_status(job_id, "cancelled")
+                self.database.update_job_status(job_id, "cancelled")
                 self.logger.info(f"Successfully cancelled job {job_id}")
 
             return success
@@ -166,12 +166,12 @@ class BatchJobManager:
                     placeholder_doc_name = f"ServerJob_{job_id[:8]}"
                     
                     # Store document and job 
-                    self.db.store_document(placeholder_doc_uuid, placeholder_doc_name)
+                    self.database.store_document(placeholder_doc_uuid, placeholder_doc_name)
                     
                     # Estimate file count from API data if available
                     file_count = getattr(api_job, 'total_requests', 1)
                     
-                    self.db.store_job(job_id, placeholder_doc_uuid, api_status, file_count)
+                    self.database.store_job(job_id, placeholder_doc_uuid, api_status, file_count)
                     synced_count += 1
                     
                     # Add to local jobs list for display
@@ -250,7 +250,7 @@ class BatchJobManager:
             List of dictionaries containing job information with keys: id, status, submitted
         """
         # Get all jobs from database first
-        jobs = self.db.get_all_jobs()
+        jobs = self.database.get_all_jobs()
 
         # Filter out test jobs unless in mock mode (for testing)
         if not self.mock_mode:
@@ -279,7 +279,7 @@ class BatchJobManager:
             ValueError: If the job ID is not found
         """
         # Get job from database first
-        job_details = self.db.get_job_details(job_id)
+        job_details = self.database.get_job_details(job_id)
         if not job_details:
             raise JobNotFoundError(f"Job {job_id} not found")
 
@@ -302,7 +302,7 @@ class BatchJobManager:
                         job_details["completed"] = completed_time
                         
                     # Re-fetch from database to get updated API tracking info
-                    updated_job_details = self.db.get_job_details(job_id)
+                    updated_job_details = self.database.get_job_details(job_id)
                     if updated_job_details:
                         job_details.update(updated_job_details)
 
@@ -321,7 +321,7 @@ class BatchJobManager:
         Returns:
             List of job statuses for the document
         """
-        job_ids = self.db.get_jobs_by_document_name(document_name)
+        job_ids = self.database.get_jobs_by_document_name(document_name)
         statuses = []
 
         for job_id in job_ids:

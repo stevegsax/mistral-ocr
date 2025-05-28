@@ -8,7 +8,7 @@ from typing import Optional
 class XDGPaths:
     """Utility class for managing XDG Base Directory specification paths."""
 
-    APP_NAME = "mistral-ocr"
+    APPLICATION_NAME = "mistral-ocr"
 
     @classmethod
     def get_data_dir(cls) -> pathlib.Path:
@@ -19,11 +19,11 @@ class XDGPaths:
         """
         xdg_data_home = os.environ.get("XDG_DATA_HOME")
         if xdg_data_home:
-            data_dir = pathlib.Path(xdg_data_home) / cls.APP_NAME
+            data_dir = pathlib.Path(xdg_data_home) / cls.APPLICATION_NAME
         else:
             # Fallback to XDG spec: ~/.local/share/mistral-ocr
             home = pathlib.Path.home()
-            data_dir = home / ".local" / "share" / cls.APP_NAME
+            data_dir = home / ".local" / "share" / cls.APPLICATION_NAME
 
         data_dir.mkdir(parents=True, exist_ok=True)
         return data_dir
@@ -37,11 +37,11 @@ class XDGPaths:
         """
         xdg_state_home = os.environ.get("XDG_STATE_HOME")
         if xdg_state_home:
-            state_dir = pathlib.Path(xdg_state_home) / cls.APP_NAME
+            state_dir = pathlib.Path(xdg_state_home) / cls.APPLICATION_NAME
         else:
             # Fallback to XDG spec: ~/.local/state/mistral-ocr
             home = pathlib.Path.home()
-            state_dir = home / ".local" / "state" / cls.APP_NAME
+            state_dir = home / ".local" / "state" / cls.APPLICATION_NAME
 
         state_dir.mkdir(parents=True, exist_ok=True)
         return state_dir
@@ -73,11 +73,11 @@ class XDGPaths:
         """
         xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
         if xdg_config_home:
-            config_dir = pathlib.Path(xdg_config_home) / cls.APP_NAME
+            config_dir = pathlib.Path(xdg_config_home) / cls.APPLICATION_NAME
         else:
             # Fallback to XDG spec: ~/.config/mistral-ocr
             home = pathlib.Path.home()
-            config_dir = home / ".config" / cls.APP_NAME
+            config_dir = home / ".config" / cls.APPLICATION_NAME
 
         config_dir.mkdir(parents=True, exist_ok=True)
         return config_dir
@@ -91,11 +91,11 @@ class XDGPaths:
         """
         xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
         if xdg_cache_home:
-            cache_dir = pathlib.Path(xdg_cache_home) / cls.APP_NAME
+            cache_dir = pathlib.Path(xdg_cache_home) / cls.APPLICATION_NAME
         else:
             # Fallback to XDG spec: ~/.cache/mistral-ocr
             home = pathlib.Path.home()
-            cache_dir = home / ".cache" / cls.APP_NAME
+            cache_dir = home / ".cache" / cls.APPLICATION_NAME
 
         cache_dir.mkdir(parents=True, exist_ok=True)
         return cache_dir

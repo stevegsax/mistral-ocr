@@ -46,52 +46,52 @@ class MistralOCRClient:
             self.client = None  # Mock client
 
         # Initialize logging, database, and utilities
-        self._setup_logging()
-        self._setup_database()
-        self._setup_utilities()
+        self._initialize_logging()
+        self._initialize_database()
+        self._initialize_utilities()
         
         # Initialize specialized managers
-        self._setup_managers()
+        self._initialize_managers()
 
-    def _setup_logging(self) -> None:
-        """Set up application logging."""
+    def _initialize_logging(self) -> None:
+        """Initialize application logging."""
         from mistral_ocr.logging import get_logger, setup_logging
 
         log_directory = self.settings.state_directory
         self.log_file = setup_logging(log_directory)
         self.logger = get_logger(__name__)
 
-    def _setup_database(self) -> None:
-        """Set up database connection."""
+    def _initialize_database(self) -> None:
+        """Initialize database connection."""
         from mistral_ocr.database import Database
 
         db_path = self.settings.database_path
-        self.db = Database(db_path)
-        self.db.connect()
-        self.db.initialize_schema()
+        self.database = Database(db_path)
+        self.database.connect()
+        self.database.initialize_schema()
 
-    def _setup_utilities(self) -> None:
-        """Set up utility classes."""
+    def _initialize_utilities(self) -> None:
+        """Initialize utility classes."""
         self.file_collector = FileCollector(self.logger)
         self.result_parser = OCRResultParser(self.logger)
     
-    def _setup_managers(self) -> None:
-        """Set up specialized manager components."""
+    def _initialize_managers(self) -> None:
+        """Initialize specialized manager components."""
         # Document manager for UUID/name resolution
-        self.document_manager = DocumentManager(self.db, self.logger)
+        self.document_manager = DocumentManager(self.database, self.logger)
         
         # Job management for status tracking and operations
-        self.job_manager = BatchJobManager(self.db, self.client, self.logger, self.mock_mode)
+        self.job_manager = BatchJobManager(self.database, self.client, self.logger, self.mock_mode)
         
         # Submission management for batch processing
         self.submission_manager = BatchSubmissionManager(
-            self.db, self.client, self.document_manager, self.file_collector, 
+            self.database, self.client, self.document_manager, self.file_collector, 
             self.logger, self.mock_mode
         )
         
         # Result management for downloading and parsing
         self.result_manager = ResultManager(
-            self.db, self.client, self.result_parser, self.logger, self.mock_mode
+            self.database, self.client, self.result_parser, self.logger, self.mock_mode
         )
 
     # Document management methods - delegate to DocumentManager
@@ -107,7 +107,7 @@ class MistralOCRClient:
         Returns:
             Tuple of (document_uuid, document_name)
         """
-        return self.document_manager.resolve_document(document_name, document_uuid)
+        return self.document_manager.resolve_document_uuid_and_name(document_name, document_uuid)
 
     # Submission management methods - delegate to BatchSubmissionManager  
     def submit_documents(
