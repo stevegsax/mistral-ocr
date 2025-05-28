@@ -8,6 +8,11 @@ from mistral_ocr.client import MistralOCRClient
 from mistral_ocr.config import ConfigurationManager
 from mistral_ocr.database import Database
 from mistral_ocr.logging import get_logger, setup_logging
+from mistral_ocr.exceptions import (
+    UnsupportedFileTypeError,
+    InvalidJobIdError,
+    JobNotCompletedError,
+)
 
 
 # Helper function to run the CLI
@@ -144,7 +149,7 @@ class TestFileSubmission:
     def test_unsupported_file_type(self, tmp_path: pathlib.Path, client: MistralOCRClient) -> None:
         invalid_file = tmp_path / "file.txt"
         invalid_file.write_text("text")
-        with pytest.raises(ValueError):
+        with pytest.raises(UnsupportedFileTypeError):
             client.submit_documents([invalid_file])
 
     def test_file_not_found(self, client: MistralOCRClient) -> None:
@@ -218,7 +223,7 @@ class TestJobManagement:
         assert result is True
 
     def test_invalid_job_id(self, client: MistralOCRClient) -> None:
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidJobIdError):
             client.check_job_status("invalid")
 
 
@@ -231,7 +236,13 @@ class TestResultRetrieval:
         assert isinstance(results, list)
 
     def test_retrieve_before_completion(self, client: MistralOCRClient) -> None:
-        with pytest.raises(RuntimeError):
+        # Reset mock counter to ensure predictable behavior
+        from mistral_ocr.result_manager import ResultManager
+        ResultManager._mock_results_call_count = 0
+        
+        # First call returns empty results, second call raises exception (mock behavior)
+        client.get_results("job123")
+        with pytest.raises(JobNotCompletedError):
             client.get_results("job123")
 
     def test_automatic_download_results(

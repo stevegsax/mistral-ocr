@@ -5,6 +5,8 @@ from typing import List, Set
 
 import structlog
 
+from .exceptions import NoValidFilesError, UnsupportedFileTypeError
+
 
 class FileCollector:
     """Utility class for collecting and validating files for OCR processing."""
@@ -54,7 +56,7 @@ class FileCollector:
 
         if not all_files:
             self.logger.error("No valid files found to process")
-            raise ValueError("No valid files found to process")
+            raise NoValidFilesError("No valid files found to process")
 
         self.logger.info(f"Total files collected: {len(all_files)}")
         return all_files
@@ -102,7 +104,7 @@ class FileCollector:
         if file_path.suffix.lower() not in self.SUPPORTED_EXTENSIONS:
             error_msg = f"Unsupported file type: {file_path.suffix} for file {file_path}"
             self.logger.error(error_msg)
-            raise ValueError(f"Unsupported file type: {file_path.suffix}")
+            raise UnsupportedFileTypeError(f"Unsupported file type: {file_path.suffix}")
 
     @classmethod
     def get_supported_extensions(cls) -> Set[str]:

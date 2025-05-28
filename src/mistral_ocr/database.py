@@ -4,6 +4,8 @@ import pathlib
 import sqlite3
 from typing import Any, List, Optional, Tuple
 
+from .exceptions import DatabaseConnectionError, DatabaseOperationError
+
 
 class Database:
     """Database connection and operations for Mistral OCR."""
@@ -26,7 +28,7 @@ class Database:
     def initialize_schema(self) -> None:
         """Initialize the database schema."""
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         # Create documents table
         self.connection.execute("""
@@ -72,7 +74,7 @@ class Database:
     def _migrate_schema(self) -> None:
         """Handle database schema migrations for existing databases."""
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         
@@ -102,7 +104,7 @@ class Database:
             Query result
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         if params:
@@ -130,7 +132,7 @@ class Database:
             name: Document name
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -152,7 +154,7 @@ class Database:
             file_count: Number of files in the job
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -173,7 +175,7 @@ class Database:
             file_id: Uploaded file ID
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -193,7 +195,7 @@ class Database:
             status: New status
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -215,7 +217,7 @@ class Database:
             api_response_json: Full JSON response from API
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -239,7 +241,7 @@ class Database:
             Document UUID if found, None otherwise
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -265,7 +267,7 @@ class Database:
             List of job IDs
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -290,7 +292,7 @@ class Database:
             Tuple of (uuid, name) if found, None otherwise
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
@@ -316,7 +318,7 @@ class Database:
             List of job IDs
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
 
@@ -353,7 +355,7 @@ class Database:
             List of dictionaries containing job information
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute("""
@@ -378,7 +380,7 @@ class Database:
             Dictionary containing detailed job information, or None if not found
         """
         if not self.connection:
-            raise RuntimeError("Database not connected")
+            raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
         cursor.execute(
