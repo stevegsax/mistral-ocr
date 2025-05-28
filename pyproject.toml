@@ -33,3 +33,8 @@ disallow_incomplete_defs = true
 line-length = 100
 target-version = "py312"
 select = ["E", "F", "I"]
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.0.0",
+]
