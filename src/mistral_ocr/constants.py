@@ -108,9 +108,6 @@ FINAL_JOB_STATUSES = {
 }
 """Set of job statuses that indicate the job has finished processing."""
 
-SKIP_REFRESH_STATUSES = {JOB_STATUS_SUCCESS}
-"""Job statuses that don't need API refresh (final states only).
-Note: PENDING jobs are refreshed because they may have progressed to completion."""
 
 # MIME Types
 MIME_TYPE_PNG = "image/png"

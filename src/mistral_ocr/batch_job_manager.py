@@ -13,7 +13,6 @@ from .constants import (
     JOB_STATUS_PENDING,
     SERVER_JOB_DOC_TEMPLATE,
     SERVER_JOB_NAME_TEMPLATE,
-    SKIP_REFRESH_STATUSES,
     UUID_PREFIX_LENGTH,
 )
 from .database import Database
@@ -186,8 +185,8 @@ class BatchJobManager:
             Exception: If API communication fails (logged but not re-raised)
             
         Note:
-            This method only adds missing jobs; it does not update existing job statuses.
-            Use _refresh_job_statuses() for status updates.
+            This method is deprecated. Use _sync_and_refresh_all_jobs() for combined 
+            sync and refresh operations.
         """
         try:
             self.logger.info("Fetching all jobs from Mistral API to sync missing jobs")
@@ -264,91 +263,115 @@ class BatchJobManager:
             
         return local_jobs
     
-    def _refresh_job_statuses(self, jobs: List[JobInfo]) -> None:
-        """Refresh job statuses from Mistral API for existing jobs.
+    
+    def _sync_and_refresh_all_jobs(self, local_jobs: List[JobInfo]) -> List[JobInfo]:
+        """Sync missing jobs and refresh existing job statuses with single API call.
         
-        This method updates the status of existing jobs by querying the Mistral API.
-        It implements intelligent filtering to minimize API calls by skipping jobs
-        that are unlikely to have changed status.
-        
-        Optimization strategy:
-        - Skips jobs with final statuses (SUCCESS, COMPLETED, SUCCEEDED, FAILED, CANCELLED)
-        - Skips jobs with pending status (not yet started processing)
-        - Only queries running/processing jobs that may have status changes
-        
-        The method modifies the jobs list in-place, updating the status field
-        for each job that is refreshed from the API.
-        
-        Uses concurrent processing to improve performance when refreshing multiple jobs.
+        This method replaces the previous approach of making individual API calls for each job.
+        Instead, it makes a single call to get all jobs from the API and then:
+        1. Syncs any missing jobs to the local database
+        2. Updates statuses of existing jobs that have changed
+        3. Returns the updated job list
         
         Args:
-            jobs: List of job dictionaries to refresh (modified in-place)
+            local_jobs: Current list of jobs from local database
             
-        Note:
-            This method does not raise exceptions on individual job failures,
-            but logs warnings for jobs that cannot be refreshed.
+        Returns:
+            Updated job list with synced and refreshed jobs
         """
-        # Skip API calls for jobs that won't change: SUCCESS (final) and pending (not started)
-        skip_statuses = SKIP_REFRESH_STATUSES
-        jobs_to_refresh = [job for job in jobs if job.status not in skip_statuses]
-        skipped_count = len(jobs) - len(jobs_to_refresh)
-
-        if skipped_count > 0:
-            msg = f"Skipping API refresh for {skipped_count} jobs with final/pending status"
-            self.logger.debug(msg)
-
-        if jobs_to_refresh:
-            count = len(jobs_to_refresh)
-            self.logger.info(f"Refreshing status for {count} jobs from Mistral API")
-
-            # Use async processing for concurrent API calls when refreshing multiple jobs
-            if count > 1:
-                try:
-                    # Run concurrent status refresh
-                    updated_jobs = run_async_in_sync_context(
-                        self.concurrent_processor.refresh_job_statuses_async,
-                        self, jobs, skip_statuses
+        try:
+            self.logger.info("Fetching all jobs from Mistral API for sync and refresh")
+            api_jobs = self.client.batch.jobs.list()
+            
+            # Create mapping of local jobs by ID for efficient lookup
+            local_job_map = {job.id: job for job in local_jobs}
+            synced_count = 0
+            updated_count = 0
+            
+            # Process each job from the API
+            for api_job in api_jobs.data:
+                job_id = api_job.id
+                
+                # Get status from API response
+                if isinstance(api_job.status, str):
+                    api_status = api_job.status
+                else:
+                    api_status = api_job.status.value
+                
+                # Create complete API response object for database storage
+                api_response: APIJobResponse = {
+                    "id": job_id,
+                    "status": api_status,
+                    "created_at": str(getattr(api_job, 'created_at', None)) if getattr(api_job, 'created_at', None) else None,
+                    "completed_at": str(getattr(api_job, 'completed_at', None)) if getattr(api_job, 'completed_at', None) else None,
+                    "metadata": getattr(api_job, 'metadata', None),
+                    "input_files": getattr(api_job, 'input_files', None),
+                    "output_file": getattr(api_job, 'output_file', None),
+                    "errors": getattr(api_job, 'errors', None),
+                    "total_requests": getattr(api_job, 'total_requests', None),
+                    "refresh_timestamp": self._get_current_timestamp()
+                }
+                
+                if job_id in local_job_map:
+                    # Job exists locally - check if status needs updating
+                    local_job = local_job_map[job_id]
+                    if local_job.status != api_status:
+                        self.logger.debug(f"Job {job_id} status changed: {local_job.status} -> {api_status}")
+                        # Update database with new status and API data
+                        self.database.update_job_full_api_data(job_id, api_response)
+                        # Update in-memory job object
+                        local_job.status = api_status
+                        local_job.last_api_refresh = api_response["refresh_timestamp"]
+                        local_job.completed_at = api_response.get("completed_at")
+                        local_job.input_files = api_response.get("input_files")
+                        local_job.output_file = api_response.get("output_file")
+                        local_job.errors = api_response.get("errors")
+                        local_job.file_count = api_response.get("total_requests") or local_job.file_count
+                        updated_count += 1
+                    else:
+                        # Status unchanged, but update refresh timestamp
+                        self.database.update_job_full_api_data(job_id, api_response)
+                        local_job.last_api_refresh = api_response["refresh_timestamp"]
+                else:
+                    # New job not in local database - sync it
+                    self.logger.info(f"Syncing new job from server: {job_id}")
+                    
+                    # Create placeholder document entry for unknown jobs
+                    placeholder_doc_uuid = SERVER_JOB_DOC_TEMPLATE.format(job_prefix=job_id[:UUID_PREFIX_LENGTH])
+                    placeholder_doc_name = SERVER_JOB_NAME_TEMPLATE.format(job_prefix=job_id[:UUID_PREFIX_LENGTH])
+                    
+                    # Store document and job
+                    self.database.store_document(placeholder_doc_uuid, placeholder_doc_name)
+                    self.database.store_job_full_api_data(job_id, placeholder_doc_uuid, api_response)
+                    synced_count += 1
+                    
+                    # Create JobInfo object for the new job
+                    new_job = JobInfo(
+                        id=job_id,
+                        status=api_status,
+                        submitted=api_response.get("created_at"),
+                        created_at=api_response.get("created_at"),
+                        completed_at=api_response.get("completed_at"),
+                        file_count=api_response.get("total_requests", 1),
+                        input_files=api_response.get("input_files"),
+                        output_file=api_response.get("output_file"),
+                        errors=api_response.get("errors"),
+                        metadata=api_response.get("metadata"),
+                        last_api_refresh=api_response["refresh_timestamp"]
                     )
-                    # Update the original jobs list with concurrent results
-                    jobs.clear()
-                    jobs.extend(updated_jobs)
-                except Exception as e:
-                    self.logger.warning(f"Async refresh failed, falling back to sequential: {e}")
-                    # Fall back to sequential processing
-                    self._refresh_job_statuses_sequential(jobs_to_refresh)
-            else:
-                # Single job - use direct method
-                self._refresh_job_statuses_sequential(jobs_to_refresh)
-        else:
-            self.logger.debug("No jobs require status refresh")
-
-    def _refresh_job_statuses_sequential(self, jobs_to_refresh: List[JobInfo]) -> None:
-        """Sequential fallback for job status refresh.
-        
-        Args:
-            jobs_to_refresh: List of jobs that need status refresh
-        """
-        updated_count = 0
-        for job in jobs_to_refresh:
-            job_id = job.id
-            try:
-                # Fetch live status from API (this updates database via check_job_status)
-                current_status = self.check_job_status(job_id)
-
-                # Update job status if it changed
-                if current_status != job.status:
-                    old_status = job.status
-                    msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
-                    self.logger.debug(msg)
-                    job.status = current_status  # Update in-memory for immediate display
-                    updated_count += 1
-
-            except Exception as e:
-                self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
-                # Keep existing status from database
-
-        if updated_count > 0:
-            self.logger.info(f"Updated status for {updated_count} jobs")
+                    local_jobs.append(new_job)
+            
+            if synced_count > 0:
+                self.logger.info(f"Synced {synced_count} new jobs from server")
+            if updated_count > 0:
+                self.logger.info(f"Updated status for {updated_count} existing jobs")
+            
+            return local_jobs
+            
+        except Exception as e:
+            self.logger.error(f"Failed to sync and refresh jobs from API: {e}")
+            # Return original jobs list on error
+            return local_jobs
     
     def list_all_jobs(self) -> List[JobInfo]:
         """List all jobs with their basic status information.
@@ -370,9 +393,8 @@ class BatchJobManager:
             jobs = self._filter_test_jobs(jobs)
 
         if not self.mock_mode:
-            # Sync missing jobs from server and refresh existing job statuses
-            jobs = self._sync_missing_jobs_from_server(jobs)
-            self._refresh_job_statuses(jobs)
+            # Sync and refresh all jobs with single API call
+            jobs = self._sync_and_refresh_all_jobs(jobs)
 
         return jobs
     
