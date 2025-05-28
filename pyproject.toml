@@ -40,9 +40,15 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.pytest]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+asyncio_mode = "auto"
+markers = [
+    "unit: Unit tests with mocked dependencies",
+    "integration: Integration tests that may use real APIs",
+    "asyncio: Async tests"
+]
 
 [tool.mypy]
 python_version = "3.12"
@@ -58,6 +64,8 @@ select = ["E", "F", "I"]
 [dependency-groups]
 dev = [
     "pytest>=8.3.5",
+    "pytest-asyncio>=1.0.0",
+    "pytest-httpx>=0.35.0",
 ]
 
 [tool.ruff]

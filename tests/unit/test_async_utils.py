@@ -196,10 +196,11 @@ class TestConcurrentJobProcessor:
             "job3": "running"
         }.get(job_id, "unknown")
         
+        from mistral_ocr.types import JobInfo
         jobs = [
-            {"id": "job1", "status": "running"},
-            {"id": "job2", "status": "pending"},
-            {"id": "job3", "status": "processing"}
+            JobInfo(id="job1", status="running", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job2", status="pending", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job3", status="processing", submitted="2024-01-01T10:00:00Z")
         ]
         
         skip_statuses = {"SUCCESS", "COMPLETED", "FAILED"}
@@ -230,10 +231,11 @@ class TestConcurrentJobProcessor:
         
         mock_job_manager.check_job_status.side_effect = mock_check_status
         
+        from mistral_ocr.types import JobInfo
         jobs = [
-            {"id": "job1", "status": "SUCCESS"},  # Should be skipped
-            {"id": "job2", "status": "running"},   # Should be refreshed
-            {"id": "job3", "status": "FAILED"}     # Should be skipped
+            JobInfo(id="job1", status="SUCCESS", submitted="2024-01-01T10:00:00Z"),  # Should be skipped
+            JobInfo(id="job2", status="running", submitted="2024-01-01T10:00:00Z"),   # Should be refreshed
+            JobInfo(id="job3", status="FAILED", submitted="2024-01-01T10:00:00Z")     # Should be skipped
         ]
         
         skip_statuses = {"SUCCESS", "FAILED", "COMPLETED"}
@@ -259,10 +261,11 @@ class TestConcurrentJobProcessor:
         
         mock_job_manager.check_job_status.side_effect = mock_check_status
         
+        from mistral_ocr.types import JobInfo
         jobs = [
-            {"id": "job1", "status": "running"},
-            {"id": "job2", "status": "processing"},
-            {"id": "job3", "status": "pending"}
+            JobInfo(id="job1", status="running", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job2", status="processing", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job3", status="pending", submitted="2024-01-01T10:00:00Z")
         ]
         
         skip_statuses = set()
@@ -500,12 +503,13 @@ class TestIntegrationScenarios:
         processor = ConcurrentJobProcessor(max_concurrent=3)
         job_manager = MockJobManager()
         
+        from mistral_ocr.types import JobInfo
         jobs = [
-            {"id": "job_complete_1", "status": "running"},
-            {"id": "job_fail_1", "status": "processing"},
-            {"id": "job_running_1", "status": "pending"},
-            {"id": "job_complete_2", "status": "running"},
-            {"id": "job_running_2", "status": "processing"}
+            JobInfo(id="job_complete_1", status="running", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job_fail_1", status="processing", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job_running_1", status="pending", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job_complete_2", status="running", submitted="2024-01-01T10:00:00Z"),
+            JobInfo(id="job_running_2", status="processing", submitted="2024-01-01T10:00:00Z")
         ]
         
         skip_statuses = {"SUCCESS", "FAILED"}
