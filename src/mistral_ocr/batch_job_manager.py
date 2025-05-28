@@ -5,6 +5,7 @@ from typing import List, Optional, TYPE_CHECKING
 
 from .types import JobInfo, JobDetails, APIJobResponse
 from .validation import validate_job_id
+from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
 from datetime import datetime, timezone
 
 import structlog
@@ -43,6 +44,14 @@ class BatchJobManager:
         self.client = api_client
         self.logger = logger
         self.mock_mode = mock_mode
+        self._concurrent_processor: Optional[ConcurrentJobProcessor] = None
+
+    @property
+    def concurrent_processor(self) -> ConcurrentJobProcessor:
+        """Get or create the concurrent processor."""
+        if self._concurrent_processor is None:
+            self._concurrent_processor = ConcurrentJobProcessor(max_concurrent=10)
+        return self._concurrent_processor
     
     @validate_job_id
     def check_job_status(self, job_id: str) -> str:
@@ -247,6 +256,8 @@ class BatchJobManager:
         The method modifies the jobs list in-place, updating the status field
         for each job that is refreshed from the API.
         
+        Uses concurrent processing to improve performance when refreshing multiple jobs.
+        
         Args:
             jobs: List of job dictionaries to refresh (modified in-place)
             
@@ -267,29 +278,54 @@ class BatchJobManager:
             count = len(jobs_to_refresh)
             self.logger.info(f"Refreshing status for {count} jobs from Mistral API")
 
-            updated_count = 0
-            for job in jobs_to_refresh:
-                job_id = job["id"]
+            # Use async processing for concurrent API calls when refreshing multiple jobs
+            if count > 1:
                 try:
-                    # Fetch live status from API (this updates database via check_job_status)
-                    current_status = self.check_job_status(job_id)
-
-                    # Update job status if it changed
-                    if current_status != job["status"]:
-                        old_status = job["status"]
-                        msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
-                        self.logger.debug(msg)
-                        job["status"] = current_status  # Update in-memory for immediate display
-                        updated_count += 1
-
+                    # Run concurrent status refresh
+                    updated_jobs = run_async_in_sync_context(
+                        self.concurrent_processor.refresh_job_statuses_async,
+                        self, jobs, skip_statuses
+                    )
+                    # Update the original jobs list with concurrent results
+                    jobs.clear()
+                    jobs.extend(updated_jobs)
                 except Exception as e:
-                    self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
-                    # Keep existing status from database
-
-            if updated_count > 0:
-                self.logger.info(f"Updated status for {updated_count} jobs")
+                    self.logger.warning(f"Async refresh failed, falling back to sequential: {e}")
+                    # Fall back to sequential processing
+                    self._refresh_job_statuses_sequential(jobs_to_refresh)
+            else:
+                # Single job - use direct method
+                self._refresh_job_statuses_sequential(jobs_to_refresh)
         else:
             self.logger.debug("No jobs require status refresh")
+
+    def _refresh_job_statuses_sequential(self, jobs_to_refresh: List[JobInfo]) -> None:
+        """Sequential fallback for job status refresh.
+        
+        Args:
+            jobs_to_refresh: List of jobs that need status refresh
+        """
+        updated_count = 0
+        for job in jobs_to_refresh:
+            job_id = job["id"]
+            try:
+                # Fetch live status from API (this updates database via check_job_status)
+                current_status = self.check_job_status(job_id)
+
+                # Update job status if it changed
+                if current_status != job["status"]:
+                    old_status = job["status"]
+                    msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
+                    self.logger.debug(msg)
+                    job["status"] = current_status  # Update in-memory for immediate display
+                    updated_count += 1
+
+            except Exception as e:
+                self.logger.warning(f"Failed to refresh status for job {job_id}: {e}")
+                # Keep existing status from database
+
+        if updated_count > 0:
+            self.logger.info(f"Updated status for {updated_count} jobs")
     
     def list_all_jobs(self) -> List[JobInfo]:
         """List all jobs with their basic status information.
