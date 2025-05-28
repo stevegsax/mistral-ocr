@@ -7,10 +7,10 @@ from mistral_ocr.exceptions import MistralOCRError
 
 
 # Command handler functions
-def handle_submit_command(args, client, config):
+def handle_submit_command(args, client, settings):
     """Handle document submission command."""
     file_path = pathlib.Path(args.submit)
-    model = args.model or config.get_default_model()
+    model = args.model or settings.get_default_model()
 
     job_id = client.submit_documents(
         [file_path],
@@ -170,19 +170,19 @@ def main() -> None:
 
     # Import here to avoid circular imports
     from mistral_ocr.client import MistralOCRClient
-    from mistral_ocr.config import ConfigurationManager
+    from mistral_ocr.settings import get_settings
 
-    # Initialize configuration
-    config = ConfigurationManager()
+    # Initialize settings
+    settings = get_settings()
 
     # Get API key
-    api_key = config.get_api_key()
+    api_key = settings.get_api_key_optional()
     if not api_key:
         print("Error: No API key found. Set MISTRAL_API_KEY environment variable or use config.")
         sys.exit(1)
 
     try:
-        client = MistralOCRClient(api_key=api_key)
+        client = MistralOCRClient(api_key=api_key, settings=settings)
     except Exception as e:
         print(f"Error initializing client: {e}")
         sys.exit(1)
@@ -190,7 +190,7 @@ def main() -> None:
     try:
         # Route to appropriate command handler
         if args.submit:
-            handle_submit_command(args, client, config)
+            handle_submit_command(args, client, settings)
         elif args.check_job:
             handle_job_status_command(args, client)
         elif args.query_document:

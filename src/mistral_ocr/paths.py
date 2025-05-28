@@ -65,6 +65,51 @@ class XDGPaths:
         return cls.get_state_dir() / "mistral_ocr.db"
 
     @classmethod
+    def get_config_dir(cls) -> pathlib.Path:
+        """Get the XDG config directory for the application.
+
+        Returns:
+            Path to config directory (for configuration files)
+        """
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+        if xdg_config_home:
+            config_dir = pathlib.Path(xdg_config_home) / cls.APP_NAME
+        else:
+            # Fallback to XDG spec: ~/.config/mistral-ocr
+            home = pathlib.Path.home()
+            config_dir = home / ".config" / cls.APP_NAME
+
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir
+
+    @classmethod
+    def get_cache_dir(cls) -> pathlib.Path:
+        """Get the XDG cache directory for the application.
+
+        Returns:
+            Path to cache directory (for temporary files, downloads)
+        """
+        xdg_cache_home = os.environ.get("XDG_CACHE_HOME")
+        if xdg_cache_home:
+            cache_dir = pathlib.Path(xdg_cache_home) / cls.APP_NAME
+        else:
+            # Fallback to XDG spec: ~/.cache/mistral-ocr
+            home = pathlib.Path.home()
+            cache_dir = home / ".cache" / cls.APP_NAME
+
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir
+
+    @classmethod
+    def get_config_file_path(cls) -> pathlib.Path:
+        """Get the path to the application configuration file.
+
+        Returns:
+            Path to the configuration file
+        """
+        return cls.get_config_dir() / "config.json"
+
+    @classmethod
     def resolve_download_destination(
         cls, destination: Optional[pathlib.Path] = None
     ) -> pathlib.Path:

@@ -3,6 +3,7 @@
 from ._version import __version__
 from .client import MistralOCRClient
 from .models import OCRResult
+from .settings import Settings, get_settings
 from .exceptions import (
     MistralOCRError,
     DatabaseError,
@@ -34,6 +35,8 @@ __all__ = [
     "MistralOCRClient", 
     "OCRResult", 
     "__version__",
+    "Settings",
+    "get_settings",
     "MistralOCRError",
     "DatabaseError",
     "DatabaseConnectionError", 

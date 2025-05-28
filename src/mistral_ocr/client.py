@@ -12,9 +12,8 @@ from .document_manager import DocumentManager
 from .files import FileCollector
 from .models import OCRResult
 from .parsing import OCRResultParser
-from .paths import XDGPaths
 from .result_manager import ResultManager
-from .exceptions import MissingConfigurationError
+from .settings import get_settings, Settings
 
 
 class MistralOCRClient:
@@ -23,21 +22,23 @@ class MistralOCRClient:
     Acts as a facade coordinating specialized manager components.
     """
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
-        """Initialize the client with API key.
+    def __init__(self, api_key: Optional[str] = None, settings: Optional[Settings] = None) -> None:
+        """Initialize the client with API key and settings.
 
         Args:
-            api_key: Mistral API key for authentication. If None, reads from MISTRAL_API_KEY.
+            api_key: Mistral API key for authentication. If None, reads from settings/environment.
+            settings: Settings instance to use. If None, uses global settings.
         """
-        self.api_key = api_key or os.environ.get("MISTRAL_API_KEY")
-        if not self.api_key:
-            raise MissingConfigurationError(
-                "API key must be provided either as parameter or "
-                "MISTRAL_API_KEY environment variable"
-            )
+        self.settings = settings or get_settings()
+        
+        # Get API key from parameter, settings, or environment
+        if api_key:
+            self.api_key = api_key
+        else:
+            self.api_key = self.settings.get_api_key()
 
         # Use mock mode for testing
-        self.mock_mode = self.api_key == "test"
+        self.mock_mode = self.api_key == "test" or self.settings.is_mock_mode()
 
         if not self.mock_mode:
             self.client = Mistral(api_key=self.api_key)
@@ -56,7 +57,7 @@ class MistralOCRClient:
         """Set up application logging."""
         from mistral_ocr.logging import get_logger, setup_logging
 
-        log_directory = XDGPaths.get_state_dir()
+        log_directory = self.settings.state_directory
         self.log_file = setup_logging(log_directory)
         self.logger = get_logger(__name__)
 
@@ -64,7 +65,7 @@ class MistralOCRClient:
         """Set up database connection."""
         from mistral_ocr.database import Database
 
-        db_path = XDGPaths.get_database_path()
+        db_path = self.settings.database_path
         self.db = Database(db_path)
         self.db.connect()
         self.db.initialize_schema()
