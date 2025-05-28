@@ -4,6 +4,10 @@ import sys
 from typing import TYPE_CHECKING
 
 from mistral_ocr._version import __version__
+from mistral_ocr.constants import (
+    TEXT_PREVIEW_LENGTH, TABLE_SEPARATOR_LENGTH, JOB_ID_COLUMN_WIDTH,
+    STATUS_COLUMN_WIDTH, SUBMITTED_COLUMN_WIDTH
+)
 from mistral_ocr.exceptions import MistralOCRError
 
 if TYPE_CHECKING:
@@ -78,10 +82,10 @@ def handle_list_jobs_command(
     if not jobs:
         print("No jobs found")
     else:
-        print(f"{'Job ID':<36} {'Status':<12} {'Submitted':<20}")
-        print("-" * 70)
+        print(f"{'Job ID':<{JOB_ID_COLUMN_WIDTH}} {'Status':<{STATUS_COLUMN_WIDTH}} {'Submitted':<{SUBMITTED_COLUMN_WIDTH}}")
+        print("-" * TABLE_SEPARATOR_LENGTH)
         for job in jobs:
-            print(f"{job['id']:<36} {job['status']:<12} {job['submitted']:<20}")
+            print(f"{job['id']:<{JOB_ID_COLUMN_WIDTH}} {job['status']:<{STATUS_COLUMN_WIDTH}} {job['submitted']:<{SUBMITTED_COLUMN_WIDTH}}")
 
 
 def handle_job_details_command(
@@ -138,7 +142,7 @@ def handle_get_results_command(
     print(f"Results for job {args.get_results}: {len(results)} items")
     for i, result in enumerate(results, 1):
         print(f"\n--- Result {i} ({result.file_name}) ---")
-        print(result.text[:200] + "..." if len(result.text) > 200 else result.text)
+        print(result.text[:TEXT_PREVIEW_LENGTH] + "..." if len(result.text) > TEXT_PREVIEW_LENGTH else result.text)
 
 
 def handle_download_results_command(

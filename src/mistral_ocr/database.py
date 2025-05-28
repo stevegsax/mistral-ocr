@@ -4,6 +4,7 @@ import pathlib
 import sqlite3
 from typing import Any, List, Optional, Tuple
 
+from .constants import PRAGMA_FOREIGN_KEYS
 from .exceptions import DatabaseConnectionError, DatabaseOperationError
 
 
@@ -23,7 +24,7 @@ class Database:
         """Connect to the database."""
         self.connection = sqlite3.connect(str(self.db_path))
         # Enable foreign key constraints
-        self.connection.execute("PRAGMA foreign_keys = ON")
+        self.connection.execute(PRAGMA_FOREIGN_KEYS)
 
     def initialize_schema(self) -> None:
         """Initialize the database schema."""

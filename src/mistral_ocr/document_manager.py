@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 
 import structlog
 
+from .constants import DOCUMENT_NAME_TEMPLATE, UUID_PREFIX_LENGTH
 from .database import Database
 
 
@@ -36,7 +37,7 @@ class DocumentManager:
         if document_uuid:
             self.logger.info(f"Using existing document UUID: {document_uuid}")
             # Use existing UUID, generate name if not provided
-            resolved_name = document_name or f"Document_{document_uuid[:8]}"
+            resolved_name = document_name or DOCUMENT_NAME_TEMPLATE.format(uuid_prefix=document_uuid[:UUID_PREFIX_LENGTH])
             self.database.store_document(document_uuid, resolved_name)
             return document_uuid, resolved_name
 
@@ -56,7 +57,7 @@ class DocumentManager:
 
         # Generate both UUID and name
         new_uuid = str(uuid.uuid4())
-        generated_name = f"Document_{new_uuid[:8]}"
+        generated_name = DOCUMENT_NAME_TEMPLATE.format(uuid_prefix=new_uuid[:UUID_PREFIX_LENGTH])
         self.logger.info(f"Creating new document '{generated_name}' (UUID: {new_uuid})")
         self.database.store_document(new_uuid, generated_name)
         return new_uuid, generated_name

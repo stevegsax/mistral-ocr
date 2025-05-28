@@ -6,6 +6,11 @@ from datetime import datetime, timezone
 
 import structlog
 
+from .constants import (
+    JOB_STATUS_PENDING, JOB_STATUS_CANCELLED, JOB_STATUS_COMPLETED,
+    FINAL_JOB_STATUSES, SKIP_REFRESH_STATUSES, UUID_PREFIX_LENGTH,
+    SERVER_JOB_DOC_TEMPLATE, SERVER_JOB_NAME_TEMPLATE, JSON_INDENT_SPACES
+)
 from .database import Database
 from .exceptions import InvalidJobIdError, JobNotFoundError, JobError
 
@@ -59,7 +64,7 @@ class BatchJobManager:
                 return job_details["status"]
 
             # If not found, return default completed status
-            return "completed"
+            return JOB_STATUS_COMPLETED
 
         try:
             batch_job = self.client.batch.jobs.get(job_id=job_id)
@@ -81,7 +86,7 @@ class BatchJobManager:
                     "errors": getattr(batch_job, 'errors', None),
                     "refresh_timestamp": self._get_current_timestamp()
                 }
-                api_response_json = json.dumps(api_response, default=str, indent=2)
+                api_response_json = json.dumps(api_response, default=str, indent=JSON_INDENT_SPACES)
                 
                 # Update database with API refresh information
                 self.database.update_job_api_refresh(job_id, status, api_response_json)
@@ -116,9 +121,9 @@ class BatchJobManager:
                 # Create a mock job entry for cancellation
                 mock_doc_uuid = "mock-doc-uuid"
                 self.database.store_document(mock_doc_uuid, "Mock Document")
-                self.database.store_job(job_id, mock_doc_uuid, "pending", 1)
+                self.database.store_job(job_id, mock_doc_uuid, JOB_STATUS_PENDING, 1)
 
-            self.database.update_job_status(job_id, "cancelled")
+            self.database.update_job_status(job_id, JOB_STATUS_CANCELLED)
             self.logger.info(f"Successfully cancelled job {job_id}")
             return True
 
@@ -129,10 +134,10 @@ class BatchJobManager:
                 if isinstance(cancelled_job.status, str)
                 else cancelled_job.status.value
             )
-            success = status == "cancelled"
+            success = status == JOB_STATUS_CANCELLED
 
             if success:
-                self.database.update_job_status(job_id, "cancelled")
+                self.database.update_job_status(job_id, JOB_STATUS_CANCELLED)
                 self.logger.info(f"Successfully cancelled job {job_id}")
 
             return success
@@ -192,8 +197,8 @@ class BatchJobManager:
                     api_created_at = str(api_job.created_at) if api_job.created_at else None
                     
                     # Create placeholder document entry for unknown jobs
-                    placeholder_doc_uuid = f"server-job-{job_id[:8]}"
-                    placeholder_doc_name = f"ServerJob_{job_id[:8]}"
+                    placeholder_doc_uuid = SERVER_JOB_DOC_TEMPLATE.format(job_prefix=job_id[:UUID_PREFIX_LENGTH])
+                    placeholder_doc_name = SERVER_JOB_NAME_TEMPLATE.format(job_prefix=job_id[:UUID_PREFIX_LENGTH])
                     
                     # Store document and job 
                     self.database.store_document(placeholder_doc_uuid, placeholder_doc_name)
@@ -247,7 +252,7 @@ class BatchJobManager:
             but logs warnings for jobs that cannot be refreshed.
         """
         # Skip API calls for jobs that won't change: SUCCESS (final) and pending (not started)
-        skip_statuses = {"SUCCESS", "pending"}
+        skip_statuses = SKIP_REFRESH_STATUSES
         jobs_to_refresh = [job for job in jobs if job["status"] not in skip_statuses]
         skipped_count = len(jobs) - len(jobs_to_refresh)
 
@@ -342,8 +347,7 @@ class BatchJobManager:
                     job_details["status"] = current_status
 
                     # Update completed timestamp if job finished
-                    finished_states = ["SUCCESS", "COMPLETED", "SUCCEEDED", "FAILED", "CANCELLED"]
-                    if current_status.upper() in finished_states:
+                    if current_status.upper() in FINAL_JOB_STATUSES:
                         completed_time = job_details.get("updated", job_details["submitted"])
                         job_details["completed"] = completed_time
                         

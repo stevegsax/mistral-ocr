@@ -4,6 +4,8 @@ import os
 import pathlib
 from typing import Optional
 
+from .constants import LOG_FILE_NAME, DATABASE_FILE_NAME, CONFIG_FILE_NAME
+
 
 class XDGPaths:
     """Utility class for managing XDG Base Directory specification paths."""
@@ -58,7 +60,7 @@ class XDGPaths:
         Returns:
             Path to the log file
         """
-        return cls.get_state_dir() / "mistral.log"
+        return cls.get_state_dir() / LOG_FILE_NAME
 
     @classmethod
     def get_database_path(cls) -> pathlib.Path:
@@ -67,7 +69,7 @@ class XDGPaths:
         Returns:
             Path to the database file
         """
-        return cls.get_state_dir() / "mistral_ocr.db"
+        return cls.get_state_dir() / DATABASE_FILE_NAME
 
     @classmethod
     def get_config_dir(cls) -> pathlib.Path:
@@ -112,7 +114,7 @@ class XDGPaths:
         Returns:
             Path to the configuration file
         """
-        return cls.get_config_dir() / "config.json"
+        return cls.get_config_dir() / CONFIG_FILE_NAME
 
     @classmethod
     def resolve_download_destination(

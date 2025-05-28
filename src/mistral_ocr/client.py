@@ -12,6 +12,7 @@ from .document_manager import DocumentManager
 from .files import FileCollector
 from .models import OCRResult
 from .parsing import OCRResultParser
+from .constants import MOCK_API_KEY
 from .result_manager import ResultManager
 from .settings import get_settings, Settings
 
@@ -38,7 +39,7 @@ class MistralOCRClient:
             self.api_key = self.settings.get_api_key()
 
         # Use mock mode for testing
-        self.mock_mode = self.api_key == "test" or self.settings.is_mock_mode()
+        self.mock_mode = self.api_key == MOCK_API_KEY or self.settings.is_mock_mode()
 
         if not self.mock_mode:
             self.client = Mistral(api_key=self.api_key)

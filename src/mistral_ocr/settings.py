@@ -5,6 +5,7 @@ import pathlib
 from typing import Optional
 
 from .config import ConfigurationManager
+from .constants import MOCK_MODE_ENV_VAR
 from .exceptions import InvalidConfigurationError, MissingConfigurationError
 from .paths import XDGPaths
 
@@ -219,7 +220,7 @@ class Settings:
         Returns:
             True if mock mode is enabled
         """
-        return os.environ.get("MISTRAL_OCR_MOCK_MODE", "").lower() in ("1", "true", "yes")
+        return os.environ.get(MOCK_MODE_ENV_VAR, "").lower() in ("1", "true", "yes")
 
 
 # Global settings instance for convenience

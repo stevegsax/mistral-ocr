@@ -5,6 +5,11 @@ import os
 import pathlib
 from typing import Optional
 
+from .constants import (
+    MIN_API_KEY_LENGTH, DEFAULT_API_TIMEOUT_SECONDS, MAX_API_TIMEOUT_SECONDS,
+    DEFAULT_MAX_RETRIES, MAX_RETRIES_LIMIT, DEFAULT_OCR_MODEL, API_KEY_ENV_VAR,
+    JSON_INDENT_SPACES, DEFAULT_DOWNLOAD_DIR_NAME
+)
 from .exceptions import InvalidConfigurationError
 from .paths import XDGPaths
 
@@ -29,7 +34,7 @@ class ConfigurationManager:
         if not api_key or not isinstance(api_key, str):
             raise InvalidConfigurationError("API key must be a non-empty string")
         
-        if len(api_key.strip()) < 10:  # Basic length check
+        if len(api_key.strip()) < MIN_API_KEY_LENGTH:  # Basic length check
             raise InvalidConfigurationError("API key appears to be too short")
     
     def validate_model_name(self, model: str) -> None:
@@ -63,7 +68,7 @@ class ConfigurationManager:
         """Save configuration to file."""
         try:
             with open(self.config_file, "w") as f:
-                json.dump(self._config, f, indent=2)
+                json.dump(self._config, f, indent=JSON_INDENT_SPACES)
         except IOError:
             # Handle save errors gracefully
             pass
@@ -97,7 +102,7 @@ class ConfigurationManager:
             API key from environment or config file
         """
         # Environment variable takes precedence
-        api_key = os.environ.get("MISTRAL_API_KEY")
+        api_key = os.environ.get(API_KEY_ENV_VAR)
         if api_key:
             return api_key
 
@@ -122,7 +127,7 @@ class ConfigurationManager:
         Returns:
             Default model name
         """
-        return self.get("default_model", "mistral-ocr-latest") or "mistral-ocr-latest"
+        return self.get("default_model", DEFAULT_OCR_MODEL) or DEFAULT_OCR_MODEL
 
     def set_default_model(self, model: str) -> None:
         """Set the default OCR model.
@@ -146,7 +151,7 @@ class ConfigurationManager:
         if download_dir:
             return pathlib.Path(download_dir)
 
-        return XDGPaths.get_data_dir() / "downloads"
+        return XDGPaths.get_data_dir() / DEFAULT_DOWNLOAD_DIR_NAME
 
     def set_download_directory(self, path: pathlib.Path) -> None:
         """Set the download directory for results.
@@ -174,11 +179,11 @@ class ConfigurationManager:
         Returns:
             Timeout value in seconds (default: 300)
         """
-        timeout_str = self.get("api_timeout", "300")
+        timeout_str = self.get("api_timeout", str(DEFAULT_API_TIMEOUT_SECONDS))
         try:
             return int(timeout_str)
         except ValueError:
-            return 300
+            return DEFAULT_API_TIMEOUT_SECONDS
     
     def set_timeout(self, timeout: int) -> None:
         """Set the API timeout in seconds.
@@ -189,8 +194,8 @@ class ConfigurationManager:
         Raises:
             InvalidConfigurationError: If timeout value is invalid
         """
-        if not isinstance(timeout, int) or timeout < 1 or timeout > 3600:
-            raise InvalidConfigurationError("Timeout must be an integer between 1 and 3600 seconds")
+        if not isinstance(timeout, int) or timeout < 1 or timeout > MAX_API_TIMEOUT_SECONDS:
+            raise InvalidConfigurationError(f"Timeout must be an integer between 1 and {MAX_API_TIMEOUT_SECONDS} seconds")
         
         self.set("api_timeout", str(timeout))
     
@@ -200,11 +205,11 @@ class ConfigurationManager:
         Returns:
             Maximum retry count (default: 3)
         """
-        retries_str = self.get("max_retries", "3")
+        retries_str = self.get("max_retries", str(DEFAULT_MAX_RETRIES))
         try:
             return int(retries_str)
         except ValueError:
-            return 3
+            return DEFAULT_MAX_RETRIES
     
     def set_max_retries(self, retries: int) -> None:
         """Set the maximum number of API retries.
@@ -215,8 +220,8 @@ class ConfigurationManager:
         Raises:
             InvalidConfigurationError: If retry count is invalid
         """
-        if not isinstance(retries, int) or retries < 0 or retries > 10:
-            raise InvalidConfigurationError("Max retries must be an integer between 0 and 10")
+        if not isinstance(retries, int) or retries < 0 or retries > MAX_RETRIES_LIMIT:
+            raise InvalidConfigurationError(f"Max retries must be an integer between 0 and {MAX_RETRIES_LIMIT}")
         
         self.set("max_retries", str(retries))
     

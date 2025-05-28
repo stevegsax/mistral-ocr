@@ -10,6 +10,10 @@ from typing import List, Optional, Union, TYPE_CHECKING
 
 import structlog
 
+from .constants import (
+    MAX_BATCH_SIZE, DEFAULT_OCR_MODEL, OCR_BATCH_ENDPOINT, BATCH_FILE_PURPOSE,
+    MOCK_JOB_ID_TEMPLATE, MOCK_FILE_ID_TEMPLATE, UUID_PREFIX_LENGTH
+)
 from .database import Database
 from .document_manager import DocumentManager
 from .files import FileCollector
@@ -52,7 +56,7 @@ class BatchSubmissionManager:
         self.logger = logger
         self.mock_mode = mock_mode
     
-    def _create_file_batches(self, files: List[pathlib.Path], max_batch_size: int = 100) -> List[List[pathlib.Path]]:
+    def _create_file_batches(self, files: List[pathlib.Path], max_batch_size: int = MAX_BATCH_SIZE) -> List[List[pathlib.Path]]:
         """Create batches of files for processing.
         
         Args:
@@ -75,12 +79,12 @@ class BatchSubmissionManager:
             Mock job ID
         """
         BatchSubmissionManager._mock_job_sequence_number += 1
-        job_id = f"job_{BatchSubmissionManager._mock_job_sequence_number:03d}"
+        job_id = MOCK_JOB_ID_TEMPLATE.format(sequence=BatchSubmissionManager._mock_job_sequence_number)
 
         # Mock file uploads
         for file_path in batch_files:
             BatchSubmissionManager._mock_file_sequence_number += 1
-            file_id = f"file_{BatchSubmissionManager._mock_file_sequence_number:03d}"
+            file_id = MOCK_FILE_ID_TEMPLATE.format(sequence=BatchSubmissionManager._mock_file_sequence_number)
             self.database.store_page(str(file_path), document_uuid, file_id)
             
         return job_id
@@ -106,7 +110,7 @@ class BatchSubmissionManager:
             with open(batch_file_path, "rb") as f:
                 batch_upload = self.client.files.upload(
                     file={"file_name": batch_file_path.name, "content": f},
-                    purpose="batch",
+                    purpose=BATCH_FILE_PURPOSE,
                 )
             self.logger.info(f"Batch file uploaded with ID: {batch_upload.id}")
 
@@ -114,7 +118,7 @@ class BatchSubmissionManager:
             self.logger.info(f"Creating batch job with model: {model}")
             batch_job = self.client.batch.jobs.create(
                 input_files=[batch_upload.id],
-                endpoint="/v1/ocr",
+                endpoint=OCR_BATCH_ENDPOINT,
                 model=model,
                 metadata={"job_type": "ocr_batch"},
             )
@@ -215,7 +219,7 @@ class BatchSubmissionManager:
         if len(batches) > 1:
             self.logger.info(f"Splitting into {len(batches)} batches (100 files max per batch)")
 
-        ocr_model = model or "mistral-ocr-latest"
+        ocr_model = model or DEFAULT_OCR_MODEL
         self.logger.info(f"Using OCR model: {ocr_model}")
 
         # Process each batch
