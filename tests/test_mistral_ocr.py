@@ -12,12 +12,15 @@ from mistral_ocr.logging import get_logger, setup_logging
 
 # Helper function to run the CLI
 def run_cli(*args: str) -> subprocess.CompletedProcess:
-    """Run the CLI with the local package path."""
+    """Run the CLI with the local package path and isolated test environment."""
     env = {**os.environ, "PYTHONPATH": "src", "MISTRAL_API_KEY": "test"}
 
-    # Make sure CLI uses the same test directories if they're set
+    # Ensure CLI uses isolated test directories for both data and state
+    # This guarantees database isolation during tests
     if "XDG_DATA_HOME" in os.environ:
-        env["XDG_STATE_HOME"] = os.environ["XDG_DATA_HOME"]  # Use same temp dir for database
+        env["XDG_DATA_HOME"] = os.environ["XDG_DATA_HOME"]
+    if "XDG_STATE_HOME" in os.environ:
+        env["XDG_STATE_HOME"] = os.environ["XDG_STATE_HOME"]
 
     return subprocess.run(
         ["python", "-m", "mistral_ocr", *args],
@@ -43,8 +46,8 @@ def create_test_files(
 
 # Fixtures
 @pytest.fixture
-def client():
-    """Provide a test MistralOCRClient instance."""
+def client(xdg_data_home):
+    """Provide a test MistralOCRClient instance with isolated database."""
     return MistralOCRClient(api_key="test")
 
 
@@ -74,8 +77,12 @@ def pdf_file(tmp_path):
 
 @pytest.fixture
 def xdg_data_home(tmp_path, monkeypatch):
-    """Set XDG_DATA_HOME to tmp_path for testing."""
+    """Set XDG_DATA_HOME and XDG_STATE_HOME to tmp_path for testing.
+    
+    This ensures both data and state (including database) are isolated to test directories.
+    """
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     return tmp_path
 
 

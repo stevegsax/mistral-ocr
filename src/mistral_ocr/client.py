@@ -418,7 +418,9 @@ class MistralOCRClient:
             job_details = self.db.get_job_details(job_id)
             if not job_details:
                 # Create a mock job entry for cancellation
-                self.db.store_job(job_id, "mock-doc-uuid", "pending", 1)
+                mock_doc_uuid = "mock-doc-uuid"
+                self.db.store_document(mock_doc_uuid, "Mock Document")
+                self.db.store_job(job_id, mock_doc_uuid, "pending", 1)
 
             self.db.update_job_status(job_id, "cancelled")
             self.logger.info(f"Successfully cancelled job {job_id}")
@@ -618,7 +620,8 @@ class MistralOCRClient:
     def list_all_jobs(self) -> List[dict]:
         """List all jobs with their basic status information.
 
-        In real mode, fetches live status from Mistral API and updates database.
+        In real mode, fetches all jobs from Mistral API, syncs missing jobs to database, 
+        and updates existing jobs.
         In mock mode, uses database only.
 
         Filters out test jobs from the results.
@@ -634,7 +637,61 @@ class MistralOCRClient:
             jobs = self._filter_test_jobs(jobs)
 
         if not self.mock_mode:
-            # In real mode, refresh status from Mistral API
+            # First, sync any missing jobs from the server 
+            try:
+                self.logger.info("Fetching all jobs from Mistral API to sync missing jobs")
+                api_jobs = self.client.batch.jobs.list()
+                
+                # Get current local job IDs
+                local_job_ids = {job["id"] for job in jobs}
+                synced_count = 0
+                
+                # Check for any jobs on server that aren't in local database
+                for api_job in api_jobs.data:
+                    job_id = api_job.id
+                    
+                    if job_id not in local_job_ids:
+                        # New job not in database - sync it
+                        self.logger.info(f"Syncing new job from server: {job_id}")
+                        
+                        if isinstance(api_job.status, str):
+                            api_status = api_job.status
+                        else:
+                            api_status = api_job.status.value
+                        api_created_at = str(api_job.created_at) if api_job.created_at else None
+                        
+                        # Create placeholder document entry for unknown jobs
+                        placeholder_doc_uuid = f"server-job-{job_id[:8]}"
+                        placeholder_doc_name = f"ServerJob_{job_id[:8]}"
+                        
+                        # Store document and job 
+                        self.db.store_document(placeholder_doc_uuid, placeholder_doc_name)
+                        
+                        # Estimate file count from API data if available
+                        file_count = getattr(api_job, 'total_requests', 1)
+                        
+                        self.db.store_job(job_id, placeholder_doc_uuid, api_status, file_count)
+                        synced_count += 1
+                        
+                        # Add to local jobs list for display
+                        new_job = {
+                            "id": job_id,
+                            "status": api_status, 
+                            "submitted": api_created_at
+                        }
+                        jobs.append(new_job)
+                
+                if synced_count > 0:
+                    msg = f"Synced {synced_count} new jobs from server to local database"
+                    self.logger.info(msg)
+                    # Re-filter after adding new jobs (in case any are test jobs)
+                    jobs = self._filter_test_jobs(jobs)
+                    
+            except Exception as e:
+                self.logger.warning(f"Failed to sync jobs from API: {e}")
+                # Continue with existing behavior
+
+            # Then, refresh status from Mistral API for existing jobs
             # Skip API calls for jobs that won't change: SUCCESS (final) and pending (not started)
             skip_statuses = {"SUCCESS", "pending"}
             jobs_to_refresh = [job for job in jobs if job["status"] not in skip_statuses]
