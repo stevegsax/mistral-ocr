@@ -6,12 +6,17 @@ import mimetypes
 import os
 import pathlib
 import tempfile
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TYPE_CHECKING
+
+import structlog
 
 from .database import Database
 from .document_manager import DocumentManager
 from .files import FileCollector
 from .exceptions import JobSubmissionError
+
+if TYPE_CHECKING:
+    from mistralai import Mistral
 
 
 class BatchSubmissionManager:
@@ -21,8 +26,15 @@ class BatchSubmissionManager:
     _mock_job_sequence_number = 0
     _mock_file_sequence_number = 0
     
-    def __init__(self, database: Database, api_client, document_manager: DocumentManager,
-                 file_collector: FileCollector, logger, mock_mode: bool = False) -> None:
+    def __init__(
+        self, 
+        database: Database, 
+        api_client: Optional['Mistral'], 
+        document_manager: DocumentManager,
+        file_collector: FileCollector, 
+        logger: structlog.BoundLogger, 
+        mock_mode: bool = False
+    ) -> None:
         """Initialize the batch submission manager.
         
         Args:

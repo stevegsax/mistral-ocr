@@ -98,10 +98,14 @@ class Database:
 
         Args:
             query: SQL query to execute
-            params: Query parameters
+            params: Optional query parameters for parameterized queries
 
         Returns:
-            Query result
+            Query result (cursor for SELECT queries, None for other operations)
+            
+        Raises:
+            DatabaseConnectionError: If database connection is not established
+            DatabaseOperationError: If SQL execution fails
         """
         if not self.connection:
             raise DatabaseConnectionError("Database not connected")

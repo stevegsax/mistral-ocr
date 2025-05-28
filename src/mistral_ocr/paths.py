@@ -9,6 +9,11 @@ class XDGPaths:
     """Utility class for managing XDG Base Directory specification paths."""
 
     APPLICATION_NAME = "mistral-ocr"
+    """Application name used for XDG directory paths.
+    
+    This constant is used to create application-specific subdirectories
+    within the XDG Base Directory specification structure.
+    """
 
     @classmethod
     def get_data_dir(cls) -> pathlib.Path:

@@ -12,6 +12,13 @@ class FileCollector:
     """Utility class for collecting and validating files for OCR processing."""
 
     SUPPORTED_FILE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
+    """Set of file extensions supported for OCR processing.
+    
+    Supported formats:
+    - .png: Portable Network Graphics images
+    - .jpg/.jpeg: JPEG images  
+    - .pdf: Portable Document Format files
+    """
 
     def __init__(self, logger: structlog.BoundLogger):
         """Initialize the file collector.
@@ -99,7 +106,7 @@ class FileCollector:
             file_path: File to validate
 
         Raises:
-            ValueError: If file type is not supported
+            UnsupportedFileTypeError: If file type is not supported
         """
         if file_path.suffix.lower() not in self.SUPPORTED_FILE_EXTENSIONS:
             error_msg = f"Unsupported file type: {file_path.suffix} for file {file_path}"

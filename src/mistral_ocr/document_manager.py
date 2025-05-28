@@ -3,13 +3,15 @@
 import uuid
 from typing import Optional, Tuple
 
+import structlog
+
 from .database import Database
 
 
 class DocumentManager:
     """Manages document creation and UUID/name resolution."""
     
-    def __init__(self, database: Database, logger) -> None:
+    def __init__(self, database: Database, logger: structlog.BoundLogger) -> None:
         """Initialize the document manager.
         
         Args:

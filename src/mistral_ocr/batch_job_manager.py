@@ -1,17 +1,28 @@
 """Batch job management for Mistral OCR."""
 
 import json
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime, timezone
+
+import structlog
 
 from .database import Database
 from .exceptions import InvalidJobIdError, JobNotFoundError, JobError
+
+if TYPE_CHECKING:
+    from mistralai import Mistral
 
 
 class BatchJobManager:
     """Manages batch job operations and status tracking."""
     
-    def __init__(self, database: Database, api_client, logger, mock_mode: bool = False) -> None:
+    def __init__(
+        self, 
+        database: Database, 
+        api_client: Optional['Mistral'], 
+        logger: structlog.BoundLogger, 
+        mock_mode: bool = False
+    ) -> None:
         """Initialize the batch job manager.
         
         Args:
@@ -131,13 +142,32 @@ class BatchJobManager:
             return False
     
     def _sync_missing_jobs_from_server(self, local_jobs: List[dict]) -> List[dict]:
-        """Sync any missing jobs from the server to local database.
+        """Synchronize missing jobs from Mistral API server to local database.
+        
+        This method performs a one-way sync from the API server to the local database,
+        identifying jobs that exist on the server but are missing from the local database.
+        This can happen when jobs are created from different client instances or when
+        the local database is reset.
+        
+        The sync process:
+        1. Fetches all jobs from the Mistral API
+        2. Compares with local job IDs to find missing jobs
+        3. Creates placeholder document entries for unknown jobs
+        4. Stores missing jobs in the local database
+        5. Returns updated job list including newly synced jobs
         
         Args:
-            local_jobs: Current local jobs list
+            local_jobs: Current list of jobs from local database
             
         Returns:
-            Updated jobs list with any newly synced jobs added
+            Updated job list with newly discovered server jobs appended
+            
+        Raises:
+            Exception: If API communication fails (logged but not re-raised)
+            
+        Note:
+            This method only adds missing jobs; it does not update existing job statuses.
+            Use _refresh_job_statuses() for status updates.
         """
         try:
             self.logger.info("Fetching all jobs from Mistral API to sync missing jobs")
@@ -197,8 +227,24 @@ class BatchJobManager:
     def _refresh_job_statuses(self, jobs: List[dict]) -> None:
         """Refresh job statuses from Mistral API for existing jobs.
         
+        This method updates the status of existing jobs by querying the Mistral API.
+        It implements intelligent filtering to minimize API calls by skipping jobs
+        that are unlikely to have changed status.
+        
+        Optimization strategy:
+        - Skips jobs with final statuses (SUCCESS, COMPLETED, SUCCEEDED, FAILED, CANCELLED)
+        - Skips jobs with pending status (not yet started processing)
+        - Only queries running/processing jobs that may have status changes
+        
+        The method modifies the jobs list in-place, updating the status field
+        for each job that is refreshed from the API.
+        
         Args:
-            jobs: List of jobs to refresh (modified in place)
+            jobs: List of job dictionaries to refresh (modified in-place)
+            
+        Note:
+            This method does not raise exceptions on individual job failures,
+            but logs warnings for jobs that cannot be refreshed.
         """
         # Skip API calls for jobs that won't change: SUCCESS (final) and pending (not started)
         skip_statuses = {"SUCCESS", "pending"}
@@ -247,7 +293,7 @@ class BatchJobManager:
         Filters out test jobs from the results.
 
         Returns:
-            List of dictionaries containing job information with keys: id, status, submitted
+            List of dictionaries containing job information
         """
         # Get all jobs from database first
         jobs = self.database.get_all_jobs()
@@ -335,13 +381,32 @@ class BatchJobManager:
         return statuses
     
     def _filter_test_jobs(self, jobs: List[dict]) -> List[dict]:
-        """Filter out test jobs from the job list.
-
+        """Filter out test jobs from the job list in production mode.
+        
+        This method removes jobs that are identified as test jobs based on
+        common naming patterns. Test jobs are typically created during
+        development, testing, or debugging and should not appear in
+        production job listings.
+        
+        Test job identification patterns:
+        - Jobs starting with 'job_' (mock job pattern)
+        - Jobs containing 'test' in the ID (case-insensitive)
+        - Jobs with 'job123' ID (common test identifier)
+        - Jobs with sequential numeric IDs (job_001, job_002, etc.)
+        
+        This filtering is bypassed in mock mode to allow test jobs to be
+        visible during development and testing.
+        
         Args:
-            jobs: List of job dictionaries
+            jobs: List of job dictionaries to filter
 
         Returns:
-            Filtered list with test jobs removed
+            Filtered list with test jobs removed in production mode,
+            or original list unchanged in mock mode
+            
+        Note:
+            This method is conservative in its filtering to avoid accidentally
+            hiding legitimate production jobs.
         """
 
         def is_test_job(job: dict) -> bool:

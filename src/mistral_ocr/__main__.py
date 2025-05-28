@@ -1,13 +1,22 @@
 import argparse
 import pathlib
 import sys
+from typing import TYPE_CHECKING
 
 from mistral_ocr._version import __version__
 from mistral_ocr.exceptions import MistralOCRError
 
+if TYPE_CHECKING:
+    from mistral_ocr.client import MistralOCRClient
+    from mistral_ocr.settings import Settings
+
 
 # Command handler functions
-def handle_submit_command(args, client, settings):
+def handle_submit_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient', 
+    settings: 'Settings'
+) -> None:
     """Handle document submission command."""
     file_path = pathlib.Path(args.submit)
     model = args.model or settings.get_default_model()
@@ -28,13 +37,19 @@ def handle_submit_command(args, client, settings):
         print(f"Submitted job: {job_id}")
 
 
-def handle_job_status_command(args, client):
+def handle_job_status_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle job status check command."""
     status = client.check_job_status(args.check_job)
     print(f"Job {args.check_job} status: {status}")
 
 
-def handle_document_query_command(args, client):
+def handle_document_query_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle document status query command."""
     statuses = client.query_document_status(args.query_document)
     print(f"Document '{args.query_document}' job statuses:")
@@ -42,7 +57,10 @@ def handle_document_query_command(args, client):
         print(f"  Job {i}: {status}")
 
 
-def handle_cancel_job_command(args, client):
+def handle_cancel_job_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle job cancellation command."""
     success = client.cancel_job(args.cancel_job)
     if success:
@@ -51,7 +69,10 @@ def handle_cancel_job_command(args, client):
         print(f"Failed to cancel job {args.cancel_job}")
 
 
-def handle_list_jobs_command(args, client):
+def handle_list_jobs_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle jobs listing command."""
     jobs = client.list_all_jobs()
     if not jobs:
@@ -63,7 +84,10 @@ def handle_list_jobs_command(args, client):
             print(f"{job['id']:<36} {job['status']:<12} {job['submitted']:<20}")
 
 
-def handle_job_details_command(args, client):
+def handle_job_details_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle detailed job status command."""
     try:
         job_details = client.get_job_details(args.job_status)
@@ -105,7 +129,10 @@ def handle_job_details_command(args, client):
         sys.exit(1)
 
 
-def handle_get_results_command(args, client):
+def handle_get_results_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle results retrieval command."""
     results = client.get_results(args.get_results)
     print(f"Results for job {args.get_results}: {len(results)} items")
@@ -114,7 +141,10 @@ def handle_get_results_command(args, client):
         print(result.text[:200] + "..." if len(result.text) > 200 else result.text)
 
 
-def handle_download_results_command(args, client):
+def handle_download_results_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle results download command."""
     destination = None
     if args.download_to:
@@ -124,7 +154,10 @@ def handle_download_results_command(args, client):
     print(f"Downloaded results for job {args.download_results}")
 
 
-def handle_download_document_command(args, client):
+def handle_download_document_command(
+    args: argparse.Namespace, 
+    client: 'MistralOCRClient'
+) -> None:
     """Handle document download command."""
     destination = None
     if args.download_to:
@@ -135,6 +168,25 @@ def handle_download_document_command(args, client):
 
 
 def main() -> None:
+    """Main entry point for the Mistral OCR command-line interface.
+    
+    Parses command-line arguments and routes to appropriate command handlers for:
+    - Document submission and batch processing
+    - Job status checking and management
+    - Result retrieval and downloading
+    - Document querying and listing
+    
+    The CLI supports both individual file processing and batch operations,
+    with automatic file validation, job tracking, and result management.
+    
+    Environment Variables:
+        MISTRAL_API_KEY: Required API key for Mistral service authentication
+        XDG_DATA_HOME: Optional data directory override
+        XDG_STATE_HOME: Optional state directory override
+        
+    Raises:
+        SystemExit: On error conditions or missing configuration
+    """
     parser = argparse.ArgumentParser(
         prog="mistral-ocr", description="Submit OCR batches to the Mistral API"
     )

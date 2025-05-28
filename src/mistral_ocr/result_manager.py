@@ -1,13 +1,19 @@
 """Result management for Mistral OCR."""
 
 import pathlib
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
+
+import structlog
 
 from .database import Database
 from .models import OCRResult
 from .parsing import OCRResultParser
 from .paths import XDGPaths
 from .exceptions import JobNotCompletedError, ResultDownloadError, ResultNotAvailableError
+
+if TYPE_CHECKING:
+    from mistralai import Mistral
+    from .batch_job_manager import BatchJobManager
 
 
 class ResultManager:
@@ -17,8 +23,14 @@ class ResultManager:
     _mock_get_results_call_count = 0
     _mock_download_results_call_count = 0
     
-    def __init__(self, database: Database, api_client, result_parser: OCRResultParser, 
-                 logger, mock_mode: bool = False) -> None:
+    def __init__(
+        self, 
+        database: Database, 
+        api_client: Optional['Mistral'], 
+        result_parser: OCRResultParser, 
+        logger: structlog.BoundLogger, 
+        mock_mode: bool = False
+    ) -> None:
         """Initialize the result manager.
         
         Args:
@@ -34,7 +46,11 @@ class ResultManager:
         self.logger = logger
         self.mock_mode = mock_mode
     
-    def get_results(self, job_id: str, job_manager=None) -> List[OCRResult]:
+    def get_results(
+        self, 
+        job_id: str, 
+        job_manager: Optional['BatchJobManager'] = None
+    ) -> List[OCRResult]:
         """Retrieve results for a completed job.
 
         Args:
@@ -147,7 +163,10 @@ class ResultManager:
             raise ResultDownloadError(error_msg)
     
     def download_document_results(
-        self, document_identifier: str, destination: Optional[pathlib.Path] = None, job_manager=None
+        self, 
+        document_identifier: str, 
+        destination: Optional[pathlib.Path] = None, 
+        job_manager: Optional['BatchJobManager'] = None
     ) -> None:
         """Download results for all jobs associated with a document.
 
