@@ -3,7 +3,7 @@
 import json
 from typing import List, Optional, TYPE_CHECKING
 
-from .types import JobInfo, JobDetails, APIJobResponse
+from .types import JobInfo, JobDetails, APIJobResponse, FullJobInfo
 from .validation import validate_job_id
 from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
 from datetime import datetime, timezone
@@ -84,27 +84,27 @@ class BatchJobManager:
                 batch_job.status if isinstance(batch_job.status, str) else batch_job.status.value
             )
 
-            # Capture full API response as JSON for debugging/tracking
+            # Capture full API response for storage
             try:
                 # Convert the response object to dict for JSON serialization
-                api_response = {
+                api_response: APIJobResponse = {
                     "id": batch_job.id,
                     "status": status,
-                    "created_at": getattr(batch_job, 'created_at', None),
-                    "completed_at": getattr(batch_job, 'completed_at', None),
+                    "created_at": str(getattr(batch_job, 'created_at', None)) if getattr(batch_job, 'created_at', None) else None,
+                    "completed_at": str(getattr(batch_job, 'completed_at', None)) if getattr(batch_job, 'completed_at', None) else None,
                     "metadata": getattr(batch_job, 'metadata', None),
                     "input_files": getattr(batch_job, 'input_files', None),
                     "output_file": getattr(batch_job, 'output_file', None),
                     "errors": getattr(batch_job, 'errors', None),
+                    "total_requests": getattr(batch_job, 'total_requests', None),
                     "refresh_timestamp": self._get_current_timestamp()
                 }
-                api_response_json = json.dumps(api_response, default=str, indent=JSON_INDENT_SPACES)
                 
-                # Update database with API refresh information
-                self.database.update_job_api_refresh(job_id, status, api_response_json)
+                # Update database with complete API data
+                self.database.update_job_full_api_data(job_id, api_response)
                 
             except Exception as e:
-                self.logger.warning(f"Failed to serialize API response for job {job_id}: {e}")
+                self.logger.warning(f"Failed to store full API response for job {job_id}: {e}")
                 # Fallback to basic status update
                 self.database.update_job_status(job_id, status)
 
@@ -215,17 +215,36 @@ class BatchJobManager:
                     # Store document and job 
                     self.database.store_document(placeholder_doc_uuid, placeholder_doc_name)
                     
-                    # Estimate file count from API data if available
-                    file_count = getattr(api_job, 'total_requests', 1)
+                    # Create complete API response object
+                    api_response: APIJobResponse = {
+                        "id": job_id,
+                        "status": api_status,
+                        "created_at": api_created_at,
+                        "completed_at": str(getattr(api_job, 'completed_at', None)) if getattr(api_job, 'completed_at', None) else None,
+                        "metadata": getattr(api_job, 'metadata', None),
+                        "input_files": getattr(api_job, 'input_files', None),
+                        "output_file": getattr(api_job, 'output_file', None),
+                        "errors": getattr(api_job, 'errors', None),
+                        "total_requests": getattr(api_job, 'total_requests', 1),
+                        "refresh_timestamp": self._get_current_timestamp()
+                    }
                     
-                    self.database.store_job(job_id, placeholder_doc_uuid, api_status, file_count)
+                    # Store complete job data
+                    self.database.store_job_full_api_data(job_id, placeholder_doc_uuid, api_response)
                     synced_count += 1
                     
                     # Add to local jobs list for display
                     new_job: JobInfo = {
                         "id": job_id,
                         "status": api_status, 
-                        "submitted": api_created_at
+                        "submitted": api_created_at,
+                        "created_at": api_created_at,
+                        "completed_at": str(getattr(api_job, 'completed_at', None)) if getattr(api_job, 'completed_at', None) else None,
+                        "file_count": getattr(api_job, 'total_requests', 1),
+                        "input_files": getattr(api_job, 'input_files', None),
+                        "output_file": getattr(api_job, 'output_file', None),
+                        "errors": getattr(api_job, 'errors', None),
+                        "metadata": getattr(api_job, 'metadata', None)
                     }
                     local_jobs.append(new_job)
             

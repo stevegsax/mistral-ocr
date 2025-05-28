@@ -8,13 +8,20 @@ class JobInfo(TypedDict):
     id: str
     status: str
     submitted: str
+    created_at: Optional[str]
+    completed_at: Optional[str]
+    file_count: Optional[int]
+    input_files: Optional[list]
+    output_file: Optional[str]
+    errors: Optional[list]
+    metadata: Optional[dict]
 
 
 class JobDetails(TypedDict):
     """Detailed job information including metadata."""
     id: str
     status: str
-    file_count: int
+    file_count: Optional[int]
     submitted: str
     updated: str
     document_name: str
@@ -22,6 +29,13 @@ class JobDetails(TypedDict):
     api_response_json: Optional[str]
     completed: Optional[str]
     error: Optional[str]
+    # API fields
+    created_at: Optional[str]
+    completed_at: Optional[str]
+    input_files: Optional[list]
+    output_file: Optional[str]
+    errors: Optional[list]
+    metadata: Optional[dict]
 
 
 class DocumentInfo(TypedDict):
@@ -50,7 +64,30 @@ class APIJobResponse(TypedDict, total=False):
     input_files: Optional[list]
     output_file: Optional[str]
     errors: Optional[list]
+    total_requests: Optional[int]
     refresh_timestamp: str
+
+
+class FullJobInfo(TypedDict):
+    """Complete job information with all API fields for storage."""
+    # Database fields
+    id: str
+    status: str
+    document_uuid: str
+    document_name: str
+    submitted: str
+    updated: str
+    last_api_refresh: Optional[str]
+    api_response_json: Optional[str]
+    # API fields
+    created_at: Optional[str]
+    completed_at: Optional[str]
+    file_count: Optional[int]
+    total_requests: Optional[int]
+    input_files: Optional[list]
+    output_file: Optional[str]
+    errors: Optional[list]
+    metadata: Optional[dict]
 
 
 class ConfigData(TypedDict, total=False):

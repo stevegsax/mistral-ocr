@@ -1,12 +1,13 @@
 """Database layer for Mistral OCR."""
 
+import json
 import pathlib
 import sqlite3
 from typing import Any, List, Optional, Tuple
 
 from .constants import PRAGMA_FOREIGN_KEYS
 from .exceptions import DatabaseConnectionError, DatabaseOperationError
-from .types import JobInfo, JobDetails, DocumentInfo, PageInfo
+from .types import JobInfo, JobDetails, DocumentInfo, PageInfo, FullJobInfo, APIJobResponse
 from .validation import require_database_connection
 
 
@@ -48,11 +49,18 @@ class Database:
                 job_id TEXT PRIMARY KEY,
                 document_uuid TEXT NOT NULL,
                 status TEXT NOT NULL,
-                file_count INTEGER NOT NULL,
+                file_count INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_api_refresh TIMESTAMP,
                 api_response_json TEXT,
+                api_created_at TEXT,
+                api_completed_at TEXT,
+                total_requests INTEGER,
+                input_files_json TEXT,
+                output_file TEXT,
+                errors_json TEXT,
+                metadata_json TEXT,
                 FOREIGN KEY (document_uuid) REFERENCES documents (uuid)
             )
         """)
@@ -81,18 +89,36 @@ class Database:
 
         cursor = self.connection.cursor()
         
-        # Check if new columns exist, if not add them
+        # List of new columns to add with their SQL types
+        new_columns = [
+            ("last_api_refresh", "TIMESTAMP"),
+            ("api_response_json", "TEXT"),
+            ("api_created_at", "TEXT"),
+            ("api_completed_at", "TEXT"),
+            ("total_requests", "INTEGER"),
+            ("input_files_json", "TEXT"),
+            ("output_file", "TEXT"),
+            ("errors_json", "TEXT"),
+            ("metadata_json", "TEXT")
+        ]
+        
+        for column_name, column_type in new_columns:
+            try:
+                cursor.execute(f"SELECT {column_name} FROM jobs LIMIT 1")
+            except sqlite3.OperationalError:
+                # Column doesn't exist, add it
+                cursor.execute(f"ALTER TABLE jobs ADD COLUMN {column_name} {column_type}")
+                
+        # Make file_count nullable for existing databases
         try:
-            cursor.execute("SELECT last_api_refresh FROM jobs LIMIT 1")
+            cursor.execute("SELECT sql FROM sqlite_master WHERE name='jobs' AND type='table'")
+            result = cursor.fetchone()
+            if result and "file_count INTEGER NOT NULL" in result[0]:
+                # Need to recreate table to make file_count nullable
+                # This is complex in SQLite, so we'll handle it in future migration if needed
+                pass
         except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE jobs ADD COLUMN last_api_refresh TIMESTAMP")
-            
-        try:
-            cursor.execute("SELECT api_response_json FROM jobs LIMIT 1")
-        except sqlite3.OperationalError:
-            # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE jobs ADD COLUMN api_response_json TEXT")
+            pass
             
         self.connection.commit()
 
@@ -151,7 +177,7 @@ class Database:
         )
         self.connection.commit()
 
-    def store_job(self, job_id: str, document_uuid: str, status: str, file_count: int) -> None:
+    def store_job(self, job_id: str, document_uuid: str, status: str, file_count: Optional[int] = None) -> None:
         """Store job metadata.
 
         Args:
@@ -235,6 +261,78 @@ class Database:
             WHERE job_id = ?
         """,
             (status, api_response_json, job_id),
+        )
+        self.connection.commit()
+        
+    def store_job_full_api_data(self, job_id: str, document_uuid: str, api_data: APIJobResponse) -> None:
+        """Store complete job information from API response.
+
+        Args:
+            job_id: Job ID
+            document_uuid: Associated document UUID
+            api_data: Complete API response data
+        """
+        if not self.connection:
+            raise DatabaseConnectionError("Database not connected")
+
+        # Serialize lists and dicts to JSON
+        input_files_json = json.dumps(api_data.get('input_files')) if api_data.get('input_files') else None
+        errors_json = json.dumps(api_data.get('errors')) if api_data.get('errors') else None
+        metadata_json = json.dumps(api_data.get('metadata')) if api_data.get('metadata') else None
+        api_response_json = json.dumps(api_data, default=str)
+
+        cursor = self.connection.cursor()
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO jobs (
+                job_id, document_uuid, status, file_count,
+                api_created_at, api_completed_at, total_requests,
+                input_files_json, output_file, errors_json, metadata_json,
+                last_api_refresh, api_response_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        """,
+            (
+                job_id, document_uuid, api_data.get('status'), 
+                api_data.get('total_requests'),
+                api_data.get('created_at'), api_data.get('completed_at'),
+                api_data.get('total_requests'), input_files_json,
+                api_data.get('output_file'), errors_json, metadata_json,
+                api_response_json
+            ),
+        )
+        self.connection.commit()
+        
+    def update_job_full_api_data(self, job_id: str, api_data: APIJobResponse) -> None:
+        """Update existing job with complete API information.
+
+        Args:
+            job_id: Job ID
+            api_data: Complete API response data
+        """
+        if not self.connection:
+            raise DatabaseConnectionError("Database not connected")
+
+        # Serialize lists and dicts to JSON
+        input_files_json = json.dumps(api_data.get('input_files')) if api_data.get('input_files') else None
+        errors_json = json.dumps(api_data.get('errors')) if api_data.get('errors') else None
+        metadata_json = json.dumps(api_data.get('metadata')) if api_data.get('metadata') else None
+        api_response_json = json.dumps(api_data, default=str)
+
+        cursor = self.connection.cursor()
+        cursor.execute(
+            """
+            UPDATE jobs 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP, 
+                api_created_at = ?, api_completed_at = ?, total_requests = ?,
+                input_files_json = ?, output_file = ?, errors_json = ?, metadata_json = ?,
+                last_api_refresh = CURRENT_TIMESTAMP, api_response_json = ?
+            WHERE job_id = ?
+        """,
+            (
+                api_data.get('status'), api_data.get('created_at'), api_data.get('completed_at'),
+                api_data.get('total_requests'), input_files_json, api_data.get('output_file'),
+                errors_json, metadata_json, api_response_json, job_id
+            ),
         )
         self.connection.commit()
 
@@ -366,14 +464,31 @@ class Database:
 
         cursor = self.connection.cursor()
         cursor.execute("""
-            SELECT j.job_id, j.status, j.created_at
+            SELECT j.job_id, j.status, j.created_at, j.api_created_at, j.api_completed_at,
+                   j.total_requests, j.input_files_json, j.output_file, j.errors_json, j.metadata_json
             FROM jobs j
             ORDER BY j.created_at DESC
         """)
 
         jobs: List[JobInfo] = []
         for row in cursor.fetchall():
-            job_info: JobInfo = {"id": row[0], "status": row[1], "submitted": row[2]}
+            # Parse JSON fields
+            input_files = json.loads(row[6]) if row[6] else None
+            errors = json.loads(row[8]) if row[8] else None
+            metadata = json.loads(row[9]) if row[9] else None
+            
+            job_info: JobInfo = {
+                "id": row[0], 
+                "status": row[1], 
+                "submitted": row[2],
+                "created_at": row[3],
+                "completed_at": row[4],
+                "file_count": row[5],
+                "input_files": input_files,
+                "output_file": row[7],
+                "errors": errors,
+                "metadata": metadata
+            }
             jobs.append(job_info)
 
         return jobs
@@ -394,7 +509,9 @@ class Database:
         cursor.execute(
             """
             SELECT j.job_id, j.status, j.file_count, j.created_at, j.updated_at,
-                   d.name as document_name, j.last_api_refresh, j.api_response_json
+                   d.name as document_name, j.last_api_refresh, j.api_response_json,
+                   j.api_created_at, j.api_completed_at, j.total_requests,
+                   j.input_files_json, j.output_file, j.errors_json, j.metadata_json
             FROM jobs j
             JOIN documents d ON j.document_uuid = d.uuid
             WHERE j.job_id = ?
@@ -406,17 +523,40 @@ class Database:
         if not result:
             return None
 
+        # Parse JSON fields safely
+        try:
+            input_files = json.loads(result[11]) if result[11] else None
+        except (json.JSONDecodeError, TypeError):
+            input_files = None
+            
+        try:
+            errors = json.loads(result[13]) if result[13] else None
+        except (json.JSONDecodeError, TypeError):
+            errors = None
+            
+        try:
+            metadata = json.loads(result[14]) if result[14] else None
+        except (json.JSONDecodeError, TypeError):
+            metadata = None
+
         job_details: JobDetails = {
             "id": result[0],
             "status": result[1],
-            "file_count": result[2],
+            "file_count": result[2] or result[10],  # Use total_requests if file_count is None
             "submitted": result[3],
             "updated": result[4],
             "document_name": result[5],
             "last_api_refresh": result[6],
             "api_response_json": result[7],
-            "completed": result[4] if result[1] in ["completed", "success"] else None,
+            "completed": result[9] if result[1] in ["completed", "success"] else None,
             "error": None,  # Could be extended to store error messages
+            # API fields
+            "created_at": result[8],
+            "completed_at": result[9],
+            "input_files": input_files,
+            "output_file": result[12],
+            "errors": errors,
+            "metadata": metadata
         }
 
         return job_details
