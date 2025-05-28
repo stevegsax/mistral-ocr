@@ -8,6 +8,8 @@ import pathlib
 import tempfile
 from typing import List, Optional, Union, TYPE_CHECKING
 
+from .types import BatchFileEntry, BatchFileBody, DocumentContent
+
 import structlog
 
 from .constants import (
@@ -273,12 +275,17 @@ class BatchSubmissionManager:
                     self.logger.debug(f"Encoding file {i + 1}/{len(file_paths)}: {file_path.name}")
                     data_url = self._encode_file_to_data_url(file_path)
                     if data_url:
-                        entry = {
+                        document_content: DocumentContent = {
+                            "type": "image_url",
+                            "image_url": data_url
+                        }
+                        body: BatchFileBody = {
+                            "document": document_content,
+                            "include_image_base64": True
+                        }
+                        entry: BatchFileEntry = {
                             "custom_id": file_path.name,
-                            "body": {
-                                "document": {"type": "image_url", "image_url": data_url},
-                                "include_image_base64": True,
-                            },
+                            "body": body
                         }
                         f.write(json.dumps(entry) + "\n")
                         successful_entries += 1

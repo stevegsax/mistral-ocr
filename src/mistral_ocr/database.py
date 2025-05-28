@@ -6,6 +6,7 @@ from typing import Any, List, Optional, Tuple
 
 from .constants import PRAGMA_FOREIGN_KEYS
 from .exceptions import DatabaseConnectionError, DatabaseOperationError
+from .types import JobInfo, JobDetails, DocumentInfo, PageInfo
 
 
 class Database:
@@ -353,7 +354,7 @@ class Database:
 
         return [row[0] for row in results]
 
-    def get_all_jobs(self) -> List[dict]:
+    def get_all_jobs(self) -> List[JobInfo]:
         """Get all jobs with basic status information.
 
         Returns:
@@ -369,13 +370,14 @@ class Database:
             ORDER BY j.created_at DESC
         """)
 
-        jobs = []
+        jobs: List[JobInfo] = []
         for row in cursor.fetchall():
-            jobs.append({"id": row[0], "status": row[1], "submitted": row[2]})
+            job_info: JobInfo = {"id": row[0], "status": row[1], "submitted": row[2]}
+            jobs.append(job_info)
 
         return jobs
 
-    def get_job_details(self, job_id: str) -> Optional[dict]:
+    def get_job_details(self, job_id: str) -> Optional[JobDetails]:
         """Get detailed information for a specific job.
 
         Args:
@@ -403,7 +405,7 @@ class Database:
         if not result:
             return None
 
-        job_details = {
+        job_details: JobDetails = {
             "id": result[0],
             "status": result[1],
             "file_count": result[2],

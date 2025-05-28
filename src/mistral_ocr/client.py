@@ -4,6 +4,8 @@ import os
 import pathlib
 from typing import List, Optional, Union
 
+from .types import JobInfo, JobDetails
+
 from mistralai import Mistral
 
 from .batch_job_manager import BatchJobManager
@@ -176,7 +178,7 @@ class MistralOCRClient:
         """
         return self.job_manager.cancel_job(job_id)
         
-    def list_all_jobs(self) -> List[dict]:
+    def list_all_jobs(self) -> List[JobInfo]:
         """List all jobs with their basic status information.
 
         In real mode, fetches all jobs from Mistral API, syncs missing jobs to database, 
@@ -190,7 +192,7 @@ class MistralOCRClient:
         """
         return self.job_manager.list_all_jobs()
         
-    def get_job_details(self, job_id: str) -> dict:
+    def get_job_details(self, job_id: str) -> JobDetails:
         """Get detailed status information for a specific job.
 
         In real mode, fetches live status from Mistral API and updates database.

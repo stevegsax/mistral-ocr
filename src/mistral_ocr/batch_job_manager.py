@@ -2,6 +2,8 @@
 
 import json
 from typing import List, Optional, TYPE_CHECKING
+
+from .types import JobInfo, JobDetails, APIJobResponse
 from datetime import datetime, timezone
 
 import structlog
@@ -146,7 +148,7 @@ class BatchJobManager:
             self.logger.error(error_msg)
             return False
     
-    def _sync_missing_jobs_from_server(self, local_jobs: List[dict]) -> List[dict]:
+    def _sync_missing_jobs_from_server(self, local_jobs: List[JobInfo]) -> List[JobInfo]:
         """Synchronize missing jobs from Mistral API server to local database.
         
         This method performs a one-way sync from the API server to the local database,
@@ -210,7 +212,7 @@ class BatchJobManager:
                     synced_count += 1
                     
                     # Add to local jobs list for display
-                    new_job = {
+                    new_job: JobInfo = {
                         "id": job_id,
                         "status": api_status, 
                         "submitted": api_created_at
@@ -229,7 +231,7 @@ class BatchJobManager:
             
         return local_jobs
     
-    def _refresh_job_statuses(self, jobs: List[dict]) -> None:
+    def _refresh_job_statuses(self, jobs: List[JobInfo]) -> None:
         """Refresh job statuses from Mistral API for existing jobs.
         
         This method updates the status of existing jobs by querying the Mistral API.
@@ -288,7 +290,7 @@ class BatchJobManager:
         else:
             self.logger.debug("No jobs require status refresh")
     
-    def list_all_jobs(self) -> List[dict]:
+    def list_all_jobs(self) -> List[JobInfo]:
         """List all jobs with their basic status information.
 
         In real mode, fetches all jobs from Mistral API, syncs missing jobs to database, 
@@ -314,7 +316,7 @@ class BatchJobManager:
 
         return jobs
     
-    def get_job_details(self, job_id: str) -> dict:
+    def get_job_details(self, job_id: str) -> JobDetails:
         """Get detailed status information for a specific job.
 
         In real mode, fetches live status from Mistral API and updates database.
@@ -384,7 +386,7 @@ class BatchJobManager:
 
         return statuses
     
-    def _filter_test_jobs(self, jobs: List[dict]) -> List[dict]:
+    def _filter_test_jobs(self, jobs: List[JobInfo]) -> List[JobInfo]:
         """Filter out test jobs from the job list in production mode.
         
         This method removes jobs that are identified as test jobs based on

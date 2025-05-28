@@ -5,6 +5,8 @@ import os
 import pathlib
 from typing import Optional
 
+from .types import ConfigData
+
 from .constants import (
     MIN_API_KEY_LENGTH, DEFAULT_API_TIMEOUT_SECONDS, MAX_API_TIMEOUT_SECONDS,
     DEFAULT_MAX_RETRIES, MAX_RETRIES_LIMIT, DEFAULT_OCR_MODEL, API_KEY_ENV_VAR,

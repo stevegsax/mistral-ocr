@@ -51,3 +51,30 @@ class APIJobResponse(TypedDict, total=False):
     output_file: Optional[str]
     errors: Optional[list]
     refresh_timestamp: str
+
+
+class ConfigData(TypedDict, total=False):
+    """Configuration file structure."""
+    api_key: str
+    default_model: str
+    download_directory: str
+    api_timeout: str
+    max_retries: str
+
+
+class DocumentContent(TypedDict):
+    """Document content for batch processing."""
+    type: str
+    image_url: str
+
+
+class BatchFileBody(TypedDict):
+    """Batch file body content."""
+    document: DocumentContent
+    include_image_base64: bool
+
+
+class BatchFileEntry(TypedDict):
+    """JSONL batch file entry structure."""
+    custom_id: str
+    body: BatchFileBody
