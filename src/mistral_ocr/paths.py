@@ -5,6 +5,7 @@ import pathlib
 from typing import Optional
 
 from .constants import LOG_FILE_NAME, DATABASE_FILE_NAME, CONFIG_FILE_NAME
+from .utils.file_operations import FileSystemUtils
 
 
 class XDGPaths:
@@ -32,7 +33,7 @@ class XDGPaths:
             home = pathlib.Path.home()
             data_dir = home / ".local" / "share" / cls.APPLICATION_NAME
 
-        data_dir.mkdir(parents=True, exist_ok=True)
+        FileSystemUtils.ensure_directory_exists(data_dir)
         return data_dir
 
     @classmethod
@@ -50,7 +51,7 @@ class XDGPaths:
             home = pathlib.Path.home()
             state_dir = home / ".local" / "state" / cls.APPLICATION_NAME
 
-        state_dir.mkdir(parents=True, exist_ok=True)
+        FileSystemUtils.ensure_directory_exists(state_dir)
         return state_dir
 
     @classmethod
@@ -86,7 +87,7 @@ class XDGPaths:
             home = pathlib.Path.home()
             config_dir = home / ".config" / cls.APPLICATION_NAME
 
-        config_dir.mkdir(parents=True, exist_ok=True)
+        FileSystemUtils.ensure_directory_exists(config_dir)
         return config_dir
 
     @classmethod
@@ -104,7 +105,7 @@ class XDGPaths:
             home = pathlib.Path.home()
             cache_dir = home / ".cache" / cls.APPLICATION_NAME
 
-        cache_dir.mkdir(parents=True, exist_ok=True)
+        FileSystemUtils.ensure_directory_exists(cache_dir)
         return cache_dir
 
     @classmethod

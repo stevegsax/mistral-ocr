@@ -7,6 +7,7 @@ from typing import Optional
 
 from .types import ConfigData
 from .validation import validate_api_key, validate_model_name, validate_timeout_range, validate_retry_count, validate_directory_path
+from .utils.file_operations import FileIOUtils
 
 from .constants import (
     MIN_API_KEY_LENGTH, DEFAULT_API_TIMEOUT_SECONDS, MAX_API_TIMEOUT_SECONDS,
@@ -55,8 +56,7 @@ class ConfigurationManager:
         """Load configuration from file."""
         if self.config_file.exists():
             try:
-                with open(self.config_file, "r") as f:
-                    return json.load(f)
+                return FileIOUtils.read_json_file(self.config_file)
             except (json.JSONDecodeError, IOError):
                 # If config file is corrupted, return empty dict
                 return {}
@@ -65,8 +65,7 @@ class ConfigurationManager:
     def _save_config(self) -> None:
         """Save configuration to file."""
         try:
-            with open(self.config_file, "w") as f:
-                json.dump(self._config, f, indent=JSON_INDENT_SPACES)
+            FileIOUtils.write_json_file(self.config_file, self._config, indent=JSON_INDENT_SPACES)
         except IOError:
             # Handle save errors gracefully
             pass

@@ -7,6 +7,7 @@ import structlog
 
 from .exceptions import NoValidFilesError, UnsupportedFileTypeError
 from .validation import validate_file_exists, validate_supported_file_type
+from .utils.file_operations import FileSystemUtils, FileTypeUtils
 
 
 class FileCollector:
@@ -89,13 +90,13 @@ class FileCollector:
         else:
             file_iterator = directory.iterdir()
 
-        for individual_file_path in file_iterator:
-            if (
-                individual_file_path.is_file()
-                and individual_file_path.suffix.lower() in self.SUPPORTED_FILE_EXTENSIONS
-                and not individual_file_path.name.startswith(".")
-            ):
-                valid_files.append(individual_file_path)
+        # Get all files and filter them using utility functions
+        all_files = [path for path in file_iterator if path.is_file()]
+        valid_files = FileTypeUtils.filter_supported_files(
+            all_files, 
+            self.SUPPORTED_FILE_EXTENSIONS, 
+            include_hidden=False
+        )
 
         self.logger.info(f"Found {len(valid_files)} supported files in {directory}")
         return valid_files

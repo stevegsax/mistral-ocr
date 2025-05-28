@@ -9,6 +9,7 @@ import tempfile
 from typing import List, Optional, Union, TYPE_CHECKING
 
 from .types import BatchFileEntry, BatchFileBody, DocumentContent
+from .utils.file_operations import FileEncodingUtils, TempFileUtils, FileSystemUtils
 
 import structlog
 
@@ -136,11 +137,7 @@ class BatchSubmissionManager:
 
         finally:
             # Clean up temporary batch file
-            if batch_file_path.exists():
-                batch_file_path.unlink()
-                self.logger.debug(
-                    f"Cleaned up temporary batch file: {batch_file_path.name}"
-                )
+            TempFileUtils.cleanup_temp_file(batch_file_path, self.logger)
     
     def _process_single_batch(self, batch_idx: int, total_batches: int, 
                             batch_files: List[pathlib.Path], document_uuid: str, model: str) -> str:
@@ -264,8 +261,7 @@ class BatchSubmissionManager:
             Path to the created batch file
         """
         # Create temporary file for batch processing
-        temp_fd, temp_path = tempfile.mkstemp(suffix=".jsonl", prefix="mistral_ocr_batch_")
-        batch_file_path = pathlib.Path(temp_path)
+        batch_file_path, temp_fd = TempFileUtils.create_temp_file(suffix=".jsonl", prefix="mistral_ocr_batch_")
         self.logger.debug(f"Creating batch file: {batch_file_path.name}")
 
         try:
@@ -298,8 +294,7 @@ class BatchSubmissionManager:
         except Exception as e:
             self.logger.error(f"Error creating batch file: {str(e)}")
             # Clean up on error
-            if batch_file_path.exists():
-                batch_file_path.unlink()
+            TempFileUtils.cleanup_temp_file(batch_file_path, self.logger)
             raise
 
         return batch_file_path
@@ -314,27 +309,7 @@ class BatchSubmissionManager:
             Base64 data URL string or None if encoding fails
         """
         try:
-            with open(file_path, "rb") as f:
-                file_data = f.read()
-
-            encoded = base64.b64encode(file_data).decode("utf-8")
-
-            # Determine MIME type based on file extension
-            mime_type, _ = mimetypes.guess_type(str(file_path))
-            if not mime_type:
-                # Default MIME types for supported extensions
-                ext = file_path.suffix.lower()
-                if ext in {".png"}:
-                    mime_type = "image/png"
-                elif ext in {".jpg", ".jpeg"}:
-                    mime_type = "image/jpeg"
-                elif ext == ".pdf":
-                    mime_type = "application/pdf"
-                else:
-                    mime_type = "application/octet-stream"
-
-            return f"data:{mime_type};base64,{encoded}"
-
+            return FileEncodingUtils.encode_to_data_url(file_path)
         except Exception as e:
             self.logger.error(f"Error encoding {file_path}: {e}")
             return None

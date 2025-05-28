@@ -10,6 +10,7 @@ from .models import OCRResult
 from .parsing import OCRResultParser
 from .paths import XDGPaths
 from .exceptions import JobNotCompletedError, ResultDownloadError, ResultNotAvailableError
+from .utils.file_operations import FileSystemUtils, FileIOUtils, PathUtils
 
 if TYPE_CHECKING:
     from mistralai import Mistral
@@ -126,7 +127,7 @@ class ResultManager:
 
             # Create destination directory
             job_dir = destination / dir_name
-            job_dir.mkdir(parents=True, exist_ok=True)
+            FileSystemUtils.ensure_directory_exists(job_dir)
             return
 
         # Get document name for this job
@@ -138,7 +139,7 @@ class ResultManager:
 
         # Create destination directory
         job_dir = destination / doc_name
-        job_dir.mkdir(parents=True, exist_ok=True)
+        FileSystemUtils.ensure_directory_exists(job_dir)
 
         try:
             # Get the results
@@ -147,11 +148,11 @@ class ResultManager:
             # Save each result to a file
             for i, result in enumerate(results):
                 output_file = job_dir / f"{result.file_name}_{i:03d}.md"
-                output_file.write_text(result.markdown, encoding="utf-8")
+                FileIOUtils.write_text_file(output_file, result.markdown)
 
                 # Also save as plain text
                 text_file = job_dir / f"{result.file_name}_{i:03d}.txt"
-                text_file.write_text(result.text, encoding="utf-8")
+                FileIOUtils.write_text_file(text_file, result.text)
 
             self.logger.info(f"Downloaded {len(results)} results to {job_dir}")
 
@@ -159,7 +160,7 @@ class ResultManager:
             error_msg = f"Failed to download results for job {job_id}: {str(e)}"
             self.logger.error(error_msg)
             # Still create the directory for test compatibility
-            job_dir.mkdir(parents=True, exist_ok=True)
+            FileSystemUtils.ensure_directory_exists(job_dir)
             raise ResultDownloadError(error_msg)
     
     def download_document_results(
