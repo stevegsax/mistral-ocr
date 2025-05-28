@@ -4,12 +4,12 @@ import functools
 import pathlib
 from typing import Any, Callable, TypeVar
 
-from .constants import MIN_API_KEY_LENGTH, MAX_API_TIMEOUT_SECONDS, MAX_RETRIES_LIMIT
+from .constants import MAX_API_TIMEOUT_SECONDS, MAX_RETRIES_LIMIT, MIN_API_KEY_LENGTH
 from .exceptions import (
-    InvalidConfigurationError, 
-    InvalidJobIdError, 
     DatabaseConnectionError,
-    UnsupportedFileTypeError
+    InvalidConfigurationError,
+    InvalidJobIdError,
+    UnsupportedFileTypeError,
 )
 
 F = TypeVar('F', bound=Callable[..., Any])

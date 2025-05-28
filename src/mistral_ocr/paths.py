@@ -4,7 +4,7 @@ import os
 import pathlib
 from typing import Optional
 
-from .constants import LOG_FILE_NAME, DATABASE_FILE_NAME, CONFIG_FILE_NAME
+from .constants import CONFIG_FILE_NAME, DATABASE_FILE_NAME, LOG_FILE_NAME
 from .utils.file_operations import FileSystemUtils
 
 

@@ -1,26 +1,26 @@
 """Batch submission management for Mistral OCR."""
 
-import base64
 import json
-import mimetypes
 import os
 import pathlib
-import tempfile
-from typing import List, Optional, Union, TYPE_CHECKING
-
-from .types import BatchFileEntry, BatchFileBody, DocumentContent
-from .utils.file_operations import FileEncodingUtils, TempFileUtils, FileSystemUtils
+from typing import TYPE_CHECKING, List, Optional, Union
 
 import structlog
 
 from .constants import (
-    MAX_BATCH_SIZE, DEFAULT_OCR_MODEL, OCR_BATCH_ENDPOINT, BATCH_FILE_PURPOSE,
-    MOCK_JOB_ID_TEMPLATE, MOCK_FILE_ID_TEMPLATE, UUID_PREFIX_LENGTH
+    BATCH_FILE_PURPOSE,
+    DEFAULT_OCR_MODEL,
+    MAX_BATCH_SIZE,
+    MOCK_FILE_ID_TEMPLATE,
+    MOCK_JOB_ID_TEMPLATE,
+    OCR_BATCH_ENDPOINT,
 )
 from .database import Database
 from .document_manager import DocumentManager
-from .files import FileCollector
 from .exceptions import JobSubmissionError
+from .files import FileCollector
+from .types import BatchFileBody, BatchFileEntry, DocumentContent
+from .utils.file_operations import FileEncodingUtils, TempFileUtils
 
 if TYPE_CHECKING:
     from mistralai import Mistral

@@ -5,7 +5,7 @@ import json
 import mimetypes
 import pathlib
 import tempfile
-from typing import Dict, Optional, Set, Tuple, Any, Union
+from typing import Any, Dict, Optional, Set, Tuple, Union
 
 import structlog
 

@@ -1,37 +1,36 @@
 """Mistral OCR client library."""
 
+from . import constants, types
 from ._version import __version__
 from .client import MistralOCRClient
-from .models import OCRResult
-from .settings import Settings, get_settings
-from . import types
-from . import constants
 from .exceptions import (
-    MistralOCRError,
-    DatabaseError,
-    DatabaseConnectionError,
-    DatabaseOperationError,
-    FileHandlingError,
-    UnsupportedFileTypeError,
-    NoValidFilesError,
-    JobError,
-    JobNotFoundError,
-    InvalidJobIdError,
-    JobNotCompletedError,
-    JobSubmissionError,
-    APIError,
     APIConnectionError,
+    APIError,
     APIResponseError,
     ConfigurationError,
-    InvalidConfigurationError,
-    MissingConfigurationError,
+    DatabaseConnectionError,
+    DatabaseError,
+    DatabaseOperationError,
+    DocumentCreationError,
     DocumentError,
     DocumentNotFoundError,
-    DocumentCreationError,
+    FileHandlingError,
+    InvalidConfigurationError,
+    InvalidJobIdError,
+    JobError,
+    JobNotCompletedError,
+    JobNotFoundError,
+    JobSubmissionError,
+    MissingConfigurationError,
+    MistralOCRError,
+    NoValidFilesError,
+    ResultDownloadError,
     ResultError,
     ResultNotAvailableError,
-    ResultDownloadError,
+    UnsupportedFileTypeError,
 )
+from .models import OCRResult
+from .settings import Settings, get_settings
 
 __all__ = [
     "MistralOCRClient", 

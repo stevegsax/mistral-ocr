@@ -5,17 +5,23 @@ import os
 import pathlib
 from typing import Optional
 
-from .types import ConfigData
-from .validation import validate_api_key, validate_model_name, validate_timeout_range, validate_retry_count, validate_directory_path
-from .utils.file_operations import FileIOUtils
-
 from .constants import (
-    MIN_API_KEY_LENGTH, DEFAULT_API_TIMEOUT_SECONDS, MAX_API_TIMEOUT_SECONDS,
-    DEFAULT_MAX_RETRIES, MAX_RETRIES_LIMIT, DEFAULT_OCR_MODEL, API_KEY_ENV_VAR,
-    JSON_INDENT_SPACES, DEFAULT_DOWNLOAD_DIR_NAME
+    API_KEY_ENV_VAR,
+    DEFAULT_API_TIMEOUT_SECONDS,
+    DEFAULT_DOWNLOAD_DIR_NAME,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_OCR_MODEL,
+    JSON_INDENT_SPACES,
 )
-from .exceptions import InvalidConfigurationError
 from .paths import XDGPaths
+from .utils.file_operations import FileIOUtils
+from .validation import (
+    validate_api_key,
+    validate_directory_path,
+    validate_model_name,
+    validate_retry_count,
+    validate_timeout_range,
+)
 
 
 class ConfigurationManager:

@@ -5,9 +5,9 @@ from typing import List, Set
 
 import structlog
 
-from .exceptions import NoValidFilesError, UnsupportedFileTypeError
-from .validation import validate_file_exists, validate_supported_file_type
-from .utils.file_operations import FileSystemUtils, FileTypeUtils
+from .exceptions import NoValidFilesError
+from .utils.file_operations import FileTypeUtils
+from .validation import validate_supported_file_type
 
 
 class FileCollector:

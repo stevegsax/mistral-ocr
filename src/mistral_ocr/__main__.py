@@ -5,8 +5,12 @@ from typing import TYPE_CHECKING, Optional
 
 from mistral_ocr._version import __version__
 from mistral_ocr.constants import (
-    TEXT_PREVIEW_LENGTH, TABLE_SEPARATOR_LENGTH, JOB_ID_COLUMN_WIDTH,
-    STATUS_COLUMN_WIDTH, SUBMITTED_COLUMN_WIDTH, API_REFRESH_COLUMN_WIDTH
+    API_REFRESH_COLUMN_WIDTH,
+    JOB_ID_COLUMN_WIDTH,
+    STATUS_COLUMN_WIDTH,
+    SUBMITTED_COLUMN_WIDTH,
+    TABLE_SEPARATOR_LENGTH,
+    TEXT_PREVIEW_LENGTH,
 )
 from mistral_ocr.exceptions import MistralOCRError
 
@@ -121,12 +125,12 @@ def handle_list_jobs_command(
         print("-" * TABLE_SEPARATOR_LENGTH)
         
         for job in jobs:
-            api_refresh = format_timestamp(job.get('last_api_refresh'))
-            submitted = format_timestamp(job.get('submitted'))
+            api_refresh = format_timestamp(job.last_api_refresh)
+            submitted = format_timestamp(job.submitted)
             
             row = (
-                f"{job['id']:<{JOB_ID_COLUMN_WIDTH}} "
-                f"{job['status']:<{STATUS_COLUMN_WIDTH}} "
+                f"{job.id:<{JOB_ID_COLUMN_WIDTH}} "
+                f"{job.status:<{STATUS_COLUMN_WIDTH}} "
                 f"{submitted:<{SUBMITTED_COLUMN_WIDTH}} "
                 f"{api_refresh:<{API_REFRESH_COLUMN_WIDTH}}"
             )

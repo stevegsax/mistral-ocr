@@ -6,8 +6,8 @@ import sqlite3
 from typing import Any, List, Optional, Tuple
 
 from .constants import PRAGMA_FOREIGN_KEYS
-from .exceptions import DatabaseConnectionError, DatabaseOperationError
-from .types import JobInfo, JobDetails, DocumentInfo, PageInfo, FullJobInfo, APIJobResponse
+from .exceptions import DatabaseConnectionError
+from .types import APIJobResponse, JobDetails, JobInfo
 from .validation import require_database_connection
 
 
@@ -489,19 +489,19 @@ class Database:
             except (json.JSONDecodeError, TypeError):
                 metadata = None
             
-            job_info: JobInfo = {
-                "id": row[0], 
-                "status": row[1], 
-                "submitted": row[2],
-                "created_at": row[3],
-                "completed_at": row[4],
-                "file_count": row[5],
-                "input_files": input_files,
-                "output_file": row[7],
-                "errors": errors,
-                "metadata": metadata,
-                "last_api_refresh": row[10]
-            }
+            job_info = JobInfo(
+                id=row[0], 
+                status=row[1], 
+                submitted=row[2],
+                created_at=row[3],
+                completed_at=row[4],
+                file_count=row[5],
+                input_files=input_files,
+                output_file=row[7],
+                errors=errors,
+                metadata=metadata,
+                last_api_refresh=row[10]
+            )
             jobs.append(job_info)
 
         return jobs
@@ -552,25 +552,25 @@ class Database:
         except (json.JSONDecodeError, TypeError):
             metadata = None
 
-        job_details: JobDetails = {
-            "id": result[0],
-            "status": result[1],
-            "file_count": result[2] or result[10],  # Use total_requests if file_count is None
-            "submitted": result[3],
-            "updated": result[4],
-            "document_name": result[5],
-            "last_api_refresh": result[6],
-            "api_response_json": result[7],
-            "completed": result[9] if result[1] in ["completed", "success"] else None,
-            "error": None,  # Could be extended to store error messages
+        job_details = JobDetails(
+            id=result[0],
+            status=result[1],
+            file_count=result[2] or result[10],  # Use total_requests if file_count is None
+            submitted=result[3],
+            updated=result[4],
+            document_name=result[5],
+            last_api_refresh=result[6],
+            api_response_json=result[7],
+            completed=result[9] if result[1] in ["completed", "success"] else None,
+            error=None,  # Could be extended to store error messages
             # API fields
-            "created_at": result[8],
-            "completed_at": result[9],
-            "input_files": input_files,
-            "output_file": result[12],
-            "errors": errors,
-            "metadata": metadata
-        }
+            created_at=result[8],
+            completed_at=result[9],
+            input_files=input_files,
+            output_file=result[12],
+            errors=errors,
+            metadata=metadata
+        )
 
         return job_details
 

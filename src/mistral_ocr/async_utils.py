@@ -2,8 +2,8 @@
 
 import asyncio
 import functools
-from typing import Any, Awaitable, Callable, List, Optional, TypeVar, Union
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Awaitable, Callable, List, Optional, TypeVar, Union
 
 import structlog
 
@@ -212,8 +212,8 @@ class ConcurrentJobProcessor:
             Updated jobs list with refreshed statuses
         """
         # Filter jobs that need refreshing
-        jobs_to_refresh = [job for job in jobs if job["status"] not in skip_statuses]
-        jobs_to_skip = [job for job in jobs if job["status"] in skip_statuses]
+        jobs_to_refresh = [job for job in jobs if job.status not in skip_statuses]
+        jobs_to_skip = [job for job in jobs if job.status in skip_statuses]
         
         if not jobs_to_refresh:
             self.logger.debug("No jobs require status refresh")
@@ -223,7 +223,7 @@ class ConcurrentJobProcessor:
         
         # Create operations for status checks
         operations = [
-            lambda job_id=job["id"]: job_manager.check_job_status(job_id) 
+            lambda job_id=job.id: job_manager.check_job_status(job_id) 
             for job in jobs_to_refresh
         ]
         
@@ -233,11 +233,11 @@ class ConcurrentJobProcessor:
         # Update job statuses
         updated_count = 0
         for job, result in zip(jobs_to_refresh, results):
-            if not isinstance(result, Exception) and result != job["status"]:
-                old_status = job["status"]
-                job["status"] = result
+            if not isinstance(result, Exception) and result != job.status:
+                old_status = job.status
+                job.status = result
                 updated_count += 1
-                self.logger.debug(f"Job {job['id']}: {old_status} -> {result}")
+                self.logger.debug(f"Job {job.id}: {old_status} -> {result}")
         
         if updated_count > 0:
             self.logger.info(f"Updated status for {updated_count} jobs")

@@ -1,22 +1,20 @@
 """Mistral OCR client for API interactions."""
 
-import os
 import pathlib
 from typing import List, Optional, Union
-
-from .types import JobInfo, JobDetails
 
 from mistralai import Mistral
 
 from .batch_job_manager import BatchJobManager
 from .batch_submission_manager import BatchSubmissionManager
+from .constants import MOCK_API_KEY
 from .document_manager import DocumentManager
 from .files import FileCollector
 from .models import OCRResult
 from .parsing import OCRResultParser
-from .constants import MOCK_API_KEY
 from .result_manager import ResultManager
-from .settings import get_settings, Settings
+from .settings import Settings, get_settings
+from .types import JobDetails, JobInfo
 
 
 class MistralOCRClient:

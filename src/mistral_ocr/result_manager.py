@@ -2,20 +2,21 @@
 
 import functools
 import pathlib
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 import structlog
 
+from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
 from .database import Database
+from .exceptions import JobNotCompletedError, ResultDownloadError, ResultNotAvailableError
 from .models import OCRResult
 from .parsing import OCRResultParser
 from .paths import XDGPaths
-from .exceptions import JobNotCompletedError, ResultDownloadError, ResultNotAvailableError
-from .utils.file_operations import FileSystemUtils, FileIOUtils, PathUtils
-from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
+from .utils.file_operations import FileIOUtils, FileSystemUtils
 
 if TYPE_CHECKING:
     from mistralai import Mistral
+
     from .batch_job_manager import BatchJobManager
 
 

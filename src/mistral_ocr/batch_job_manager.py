@@ -1,22 +1,25 @@
 """Batch job management for Mistral OCR."""
 
-import json
-from typing import List, Optional, TYPE_CHECKING
-
-from .types import JobInfo, JobDetails, APIJobResponse, FullJobInfo
-from .validation import validate_job_id
-from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING, List, Optional
 
 import structlog
 
+from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
 from .constants import (
-    JOB_STATUS_PENDING, JOB_STATUS_CANCELLED, JOB_STATUS_COMPLETED,
-    FINAL_JOB_STATUSES, SKIP_REFRESH_STATUSES, UUID_PREFIX_LENGTH,
-    SERVER_JOB_DOC_TEMPLATE, SERVER_JOB_NAME_TEMPLATE, JSON_INDENT_SPACES
+    FINAL_JOB_STATUSES,
+    JOB_STATUS_CANCELLED,
+    JOB_STATUS_COMPLETED,
+    JOB_STATUS_PENDING,
+    SERVER_JOB_DOC_TEMPLATE,
+    SERVER_JOB_NAME_TEMPLATE,
+    SKIP_REFRESH_STATUSES,
+    UUID_PREFIX_LENGTH,
 )
 from .database import Database
-from .exceptions import InvalidJobIdError, JobNotFoundError, JobError
+from .exceptions import JobError, JobNotFoundError
+from .types import APIJobResponse, JobDetails, JobInfo
+from .validation import validate_job_id
 
 if TYPE_CHECKING:
     from mistralai import Mistral
@@ -191,7 +194,7 @@ class BatchJobManager:
             api_jobs = self.client.batch.jobs.list()
             
             # Get current local job IDs
-            local_job_ids = {job["id"] for job in local_jobs}
+            local_job_ids = {job.id for job in local_jobs}
             synced_count = 0
             
             # Check for any jobs on server that aren't in local database
@@ -234,19 +237,19 @@ class BatchJobManager:
                     synced_count += 1
                     
                     # Add to local jobs list for display
-                    new_job: JobInfo = {
-                        "id": job_id,
-                        "status": api_status, 
-                        "submitted": api_created_at,
-                        "created_at": api_created_at,
-                        "completed_at": str(getattr(api_job, 'completed_at', None)) if getattr(api_job, 'completed_at', None) else None,
-                        "file_count": getattr(api_job, 'total_requests', 1),
-                        "input_files": getattr(api_job, 'input_files', None),
-                        "output_file": getattr(api_job, 'output_file', None),
-                        "errors": getattr(api_job, 'errors', None),
-                        "metadata": getattr(api_job, 'metadata', None),
-                        "last_api_refresh": self._get_current_timestamp()
-                    }
+                    new_job = JobInfo(
+                        id=job_id,
+                        status=api_status, 
+                        submitted=api_created_at,
+                        created_at=api_created_at,
+                        completed_at=str(getattr(api_job, 'completed_at', None)) if getattr(api_job, 'completed_at', None) else None,
+                        file_count=getattr(api_job, 'total_requests', 1),
+                        input_files=getattr(api_job, 'input_files', None),
+                        output_file=getattr(api_job, 'output_file', None),
+                        errors=getattr(api_job, 'errors', None),
+                        metadata=getattr(api_job, 'metadata', None),
+                        last_api_refresh=self._get_current_timestamp()
+                    )
                     local_jobs.append(new_job)
             
             if synced_count > 0:
@@ -287,7 +290,7 @@ class BatchJobManager:
         """
         # Skip API calls for jobs that won't change: SUCCESS (final) and pending (not started)
         skip_statuses = SKIP_REFRESH_STATUSES
-        jobs_to_refresh = [job for job in jobs if job["status"] not in skip_statuses]
+        jobs_to_refresh = [job for job in jobs if job.status not in skip_statuses]
         skipped_count = len(jobs) - len(jobs_to_refresh)
 
         if skipped_count > 0:
@@ -327,17 +330,17 @@ class BatchJobManager:
         """
         updated_count = 0
         for job in jobs_to_refresh:
-            job_id = job["id"]
+            job_id = job.id
             try:
                 # Fetch live status from API (this updates database via check_job_status)
                 current_status = self.check_job_status(job_id)
 
                 # Update job status if it changed
-                if current_status != job["status"]:
-                    old_status = job["status"]
+                if current_status != job.status:
+                    old_status = job.status
                     msg = f"Job {job_id} status changed: {old_status} -> {current_status}"
                     self.logger.debug(msg)
-                    job["status"] = current_status  # Update in-memory for immediate display
+                    job.status = current_status  # Update in-memory for immediate display
                     updated_count += 1
 
             except Exception as e:
@@ -473,8 +476,8 @@ class BatchJobManager:
             hiding legitimate production jobs.
         """
 
-        def is_test_job(job: dict) -> bool:
-            job_id = job["id"]
+        def is_test_job(job: JobInfo) -> bool:
+            job_id = job.id
 
             # Filter out common test job patterns
             test_patterns = [
