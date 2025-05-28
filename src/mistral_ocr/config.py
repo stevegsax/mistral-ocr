@@ -6,6 +6,7 @@ import pathlib
 from typing import Optional
 
 from .types import ConfigData
+from .validation import validate_api_key, validate_model_name, validate_timeout_range, validate_retry_count, validate_directory_path
 
 from .constants import (
     MIN_API_KEY_LENGTH, DEFAULT_API_TIMEOUT_SECONDS, MAX_API_TIMEOUT_SECONDS,
@@ -24,6 +25,7 @@ class ConfigurationManager:
         self.config_file = XDGPaths.get_config_file_path()
         self._config = self._load_config()
 
+    @validate_api_key
     def validate_api_key(self, api_key: str) -> None:
         """Validate an API key format.
         
@@ -33,12 +35,10 @@ class ConfigurationManager:
         Raises:
             InvalidConfigurationError: If the API key format is invalid
         """
-        if not api_key or not isinstance(api_key, str):
-            raise InvalidConfigurationError("API key must be a non-empty string")
-        
-        if len(api_key.strip()) < MIN_API_KEY_LENGTH:  # Basic length check
-            raise InvalidConfigurationError("API key appears to be too short")
+        # Validation logic is now handled by the decorator
+        pass
     
+    @validate_model_name
     def validate_model_name(self, model: str) -> None:
         """Validate a model name format.
         
@@ -48,12 +48,8 @@ class ConfigurationManager:
         Raises:
             InvalidConfigurationError: If the model name is invalid
         """
-        if not model or not isinstance(model, str):
-            raise InvalidConfigurationError("Model name must be a non-empty string")
-        
-        # Basic validation - could be expanded with known model names
-        if not model.strip():
-            raise InvalidConfigurationError("Model name cannot be empty")
+        # Validation logic is now handled by the decorator
+        pass
 
     def _load_config(self) -> dict[str, str]:
         """Load configuration from file."""
@@ -155,6 +151,7 @@ class ConfigurationManager:
 
         return XDGPaths.get_data_dir() / DEFAULT_DOWNLOAD_DIR_NAME
 
+    @validate_directory_path
     def set_download_directory(self, path: pathlib.Path) -> None:
         """Set the download directory for results.
 
@@ -164,15 +161,7 @@ class ConfigurationManager:
         Raises:
             InvalidConfigurationError: If the path is invalid
         """
-        if not isinstance(path, pathlib.Path):
-            raise InvalidConfigurationError("Download directory must be a Path object")
-        
-        # Ensure the directory can be created
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            raise InvalidConfigurationError(f"Cannot create download directory {path}: {e}")
-            
+        # Validation logic is now handled by the decorator
         self.set("download_directory", str(path))
 
     def get_timeout(self) -> int:
@@ -187,6 +176,7 @@ class ConfigurationManager:
         except ValueError:
             return DEFAULT_API_TIMEOUT_SECONDS
     
+    @validate_timeout_range
     def set_timeout(self, timeout: int) -> None:
         """Set the API timeout in seconds.
         
@@ -196,9 +186,7 @@ class ConfigurationManager:
         Raises:
             InvalidConfigurationError: If timeout value is invalid
         """
-        if not isinstance(timeout, int) or timeout < 1 or timeout > MAX_API_TIMEOUT_SECONDS:
-            raise InvalidConfigurationError(f"Timeout must be an integer between 1 and {MAX_API_TIMEOUT_SECONDS} seconds")
-        
+        # Validation logic is now handled by the decorator
         self.set("api_timeout", str(timeout))
     
     def get_max_retries(self) -> int:
@@ -213,6 +201,7 @@ class ConfigurationManager:
         except ValueError:
             return DEFAULT_MAX_RETRIES
     
+    @validate_retry_count
     def set_max_retries(self, retries: int) -> None:
         """Set the maximum number of API retries.
         
@@ -222,9 +211,7 @@ class ConfigurationManager:
         Raises:
             InvalidConfigurationError: If retry count is invalid
         """
-        if not isinstance(retries, int) or retries < 0 or retries > MAX_RETRIES_LIMIT:
-            raise InvalidConfigurationError(f"Max retries must be an integer between 0 and {MAX_RETRIES_LIMIT}")
-        
+        # Validation logic is now handled by the decorator
         self.set("max_retries", str(retries))
     
     def reset_to_defaults(self) -> None:

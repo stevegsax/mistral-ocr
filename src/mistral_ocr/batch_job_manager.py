@@ -4,6 +4,7 @@ import json
 from typing import List, Optional, TYPE_CHECKING
 
 from .types import JobInfo, JobDetails, APIJobResponse
+from .validation import validate_job_id
 from datetime import datetime, timezone
 
 import structlog
@@ -43,6 +44,7 @@ class BatchJobManager:
         self.logger = logger
         self.mock_mode = mock_mode
     
+    @validate_job_id
     def check_job_status(self, job_id: str) -> str:
         """Check the status of a submitted job.
 
@@ -57,8 +59,7 @@ class BatchJobManager:
         """
         if self.mock_mode:
             # Mock implementation - check database first, then return default status
-            if "invalid" in job_id.lower():
-                raise InvalidJobIdError(f"Invalid job ID: {job_id}")
+            # Job ID validation is now handled by the decorator
 
             # Try to get from database first
             job_details = self.database.get_job_details(job_id)
@@ -100,12 +101,12 @@ class BatchJobManager:
 
             return status
         except Exception as e:
-            if "invalid" in job_id.lower():
-                raise InvalidJobIdError(f"Invalid job ID: {job_id}")
+            # Job ID validation is now handled by the decorator
             error_msg = f"Failed to check job status: {str(e)}"
             self.logger.error(error_msg)
             raise JobError(error_msg)
     
+    @validate_job_id
     def cancel_job(self, job_id: str) -> bool:
         """Cancel a submitted job.
 
@@ -316,6 +317,7 @@ class BatchJobManager:
 
         return jobs
     
+    @validate_job_id
     def get_job_details(self, job_id: str) -> JobDetails:
         """Get detailed status information for a specific job.
 

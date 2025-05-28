@@ -7,6 +7,7 @@ from typing import Any, List, Optional, Tuple
 from .constants import PRAGMA_FOREIGN_KEYS
 from .exceptions import DatabaseConnectionError, DatabaseOperationError
 from .types import JobInfo, JobDetails, DocumentInfo, PageInfo
+from .validation import require_database_connection
 
 
 class Database:
@@ -27,10 +28,10 @@ class Database:
         # Enable foreign key constraints
         self.connection.execute(PRAGMA_FOREIGN_KEYS)
 
+    @require_database_connection
     def initialize_schema(self) -> None:
         """Initialize the database schema."""
-        if not self.connection:
-            raise DatabaseConnectionError("Database not connected")
+        # Database connection check is now handled by the decorator
 
         # Create documents table
         self.connection.execute("""
@@ -354,14 +355,14 @@ class Database:
 
         return [row[0] for row in results]
 
+    @require_database_connection
     def get_all_jobs(self) -> List[JobInfo]:
         """Get all jobs with basic status information.
 
         Returns:
             List of dictionaries containing job information
         """
-        if not self.connection:
-            raise DatabaseConnectionError("Database not connected")
+        # Database connection check is now handled by the decorator
 
         cursor = self.connection.cursor()
         cursor.execute("""
@@ -377,17 +378,17 @@ class Database:
 
         return jobs
 
+    @require_database_connection
     def get_job_details(self, job_id: str) -> Optional[JobDetails]:
         """Get detailed information for a specific job.
 
         Args:
-            job_id: Job ID to get details for
+            job_id: Job_ID to get details for
 
         Returns:
             Dictionary containing detailed job information, or None if not found
         """
-        if not self.connection:
-            raise DatabaseConnectionError("Database not connected")
+        # Database connection check is now handled by the decorator
 
         cursor = self.connection.cursor()
         cursor.execute(

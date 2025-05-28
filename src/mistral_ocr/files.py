@@ -6,6 +6,7 @@ from typing import List, Set
 import structlog
 
 from .exceptions import NoValidFilesError, UnsupportedFileTypeError
+from .validation import validate_file_exists, validate_supported_file_type
 
 
 class FileCollector:
@@ -99,6 +100,7 @@ class FileCollector:
         self.logger.info(f"Found {len(valid_files)} supported files in {directory}")
         return valid_files
 
+    @validate_supported_file_type({".png", ".jpg", ".jpeg", ".pdf"})
     def _validate_file_type(self, file_path: pathlib.Path) -> None:
         """Validate that a file has a supported extension.
 
@@ -108,10 +110,8 @@ class FileCollector:
         Raises:
             UnsupportedFileTypeError: If file type is not supported
         """
-        if file_path.suffix.lower() not in self.SUPPORTED_FILE_EXTENSIONS:
-            error_msg = f"Unsupported file type: {file_path.suffix} for file {file_path}"
-            self.logger.error(error_msg)
-            raise UnsupportedFileTypeError(f"Unsupported file type: {file_path.suffix}")
+        # File type validation is now handled by the decorator
+        pass
 
     @classmethod
     def get_supported_extensions(cls) -> Set[str]:
