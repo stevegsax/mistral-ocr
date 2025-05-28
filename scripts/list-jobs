@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Example cURL command that requests all batch jobs from the
+# Mistral API. The return is in JSON format.
+
 curl -X GET "https://api.mistral.ai/v1/batch/jobs" \
   -H "Authorization: Bearer $MISTRAL_API_KEY" \
-  -H "Content-Type: application/json"
+  -H "Content-Type: application/json" 
+
+

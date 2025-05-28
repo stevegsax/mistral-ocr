@@ -15,6 +15,7 @@ class JobInfo(TypedDict):
     output_file: Optional[str]
     errors: Optional[list]
     metadata: Optional[dict]
+    last_api_refresh: Optional[str]
 
 
 class JobDetails(TypedDict):

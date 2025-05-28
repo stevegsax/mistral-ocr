@@ -1,18 +1,46 @@
 import argparse
 import pathlib
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from mistral_ocr._version import __version__
 from mistral_ocr.constants import (
     TEXT_PREVIEW_LENGTH, TABLE_SEPARATOR_LENGTH, JOB_ID_COLUMN_WIDTH,
-    STATUS_COLUMN_WIDTH, SUBMITTED_COLUMN_WIDTH
+    STATUS_COLUMN_WIDTH, SUBMITTED_COLUMN_WIDTH, API_REFRESH_COLUMN_WIDTH
 )
 from mistral_ocr.exceptions import MistralOCRError
 
 if TYPE_CHECKING:
     from mistral_ocr.client import MistralOCRClient
     from mistral_ocr.settings import Settings
+
+
+# Helper functions
+def format_timestamp(timestamp: Optional[str]) -> str:
+    """Format timestamp for display, showing 'Never' if None.
+    
+    Args:
+        timestamp: ISO timestamp string or None
+        
+    Returns:
+        Formatted timestamp or 'Never'
+    """
+    if not timestamp:
+        return "Never"
+    
+    # Extract just the date and time part (remove microseconds and timezone)
+    try:
+        # Handle formats like '2024-01-01 12:34:56' or '2024-01-01T12:34:56.123Z'
+        if 'T' in timestamp:
+            date_time = timestamp.split('T')
+            date_part = date_time[0]
+            time_part = date_time[1].split('.')[0]  # Remove microseconds
+            return f"{date_part} {time_part}"
+        else:
+            # Already in 'YYYY-MM-DD HH:MM:SS' format
+            return timestamp.split('.')[0]  # Remove microseconds if present
+    except (IndexError, ValueError):
+        return timestamp  # Return as-is if parsing fails
 
 
 # Command handler functions
@@ -82,10 +110,27 @@ def handle_list_jobs_command(
     if not jobs:
         print("No jobs found")
     else:
-        print(f"{'Job ID':<{JOB_ID_COLUMN_WIDTH}} {'Status':<{STATUS_COLUMN_WIDTH}} {'Submitted':<{SUBMITTED_COLUMN_WIDTH}}")
+        # Format column headers
+        header = (
+            f"{'Job ID':<{JOB_ID_COLUMN_WIDTH}} "
+            f"{'Status':<{STATUS_COLUMN_WIDTH}} "
+            f"{'Submitted':<{SUBMITTED_COLUMN_WIDTH}} "
+            f"{'Last API Refresh':<{API_REFRESH_COLUMN_WIDTH}}"
+        )
+        print(header)
         print("-" * TABLE_SEPARATOR_LENGTH)
+        
         for job in jobs:
-            print(f"{job['id']:<{JOB_ID_COLUMN_WIDTH}} {job['status']:<{STATUS_COLUMN_WIDTH}} {job['submitted']:<{SUBMITTED_COLUMN_WIDTH}}")
+            api_refresh = format_timestamp(job.get('last_api_refresh'))
+            submitted = format_timestamp(job.get('submitted'))
+            
+            row = (
+                f"{job['id']:<{JOB_ID_COLUMN_WIDTH}} "
+                f"{job['status']:<{STATUS_COLUMN_WIDTH}} "
+                f"{submitted:<{SUBMITTED_COLUMN_WIDTH}} "
+                f"{api_refresh:<{API_REFRESH_COLUMN_WIDTH}}"
+            )
+            print(row)
 
 
 def handle_job_details_command(

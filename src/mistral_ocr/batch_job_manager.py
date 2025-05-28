@@ -244,7 +244,8 @@ class BatchJobManager:
                         "input_files": getattr(api_job, 'input_files', None),
                         "output_file": getattr(api_job, 'output_file', None),
                         "errors": getattr(api_job, 'errors', None),
-                        "metadata": getattr(api_job, 'metadata', None)
+                        "metadata": getattr(api_job, 'metadata', None),
+                        "last_api_refresh": self._get_current_timestamp()
                     }
                     local_jobs.append(new_job)
             

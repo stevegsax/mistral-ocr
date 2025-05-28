@@ -465,17 +465,29 @@ class Database:
         cursor = self.connection.cursor()
         cursor.execute("""
             SELECT j.job_id, j.status, j.created_at, j.api_created_at, j.api_completed_at,
-                   j.total_requests, j.input_files_json, j.output_file, j.errors_json, j.metadata_json
+                   j.total_requests, j.input_files_json, j.output_file, j.errors_json, j.metadata_json,
+                   j.last_api_refresh
             FROM jobs j
             ORDER BY j.created_at DESC
         """)
 
         jobs: List[JobInfo] = []
         for row in cursor.fetchall():
-            # Parse JSON fields
-            input_files = json.loads(row[6]) if row[6] else None
-            errors = json.loads(row[8]) if row[8] else None
-            metadata = json.loads(row[9]) if row[9] else None
+            # Parse JSON fields safely
+            try:
+                input_files = json.loads(row[6]) if row[6] else None
+            except (json.JSONDecodeError, TypeError):
+                input_files = None
+                
+            try:
+                errors = json.loads(row[8]) if row[8] else None
+            except (json.JSONDecodeError, TypeError):
+                errors = None
+                
+            try:
+                metadata = json.loads(row[9]) if row[9] else None
+            except (json.JSONDecodeError, TypeError):
+                metadata = None
             
             job_info: JobInfo = {
                 "id": row[0], 
@@ -487,7 +499,8 @@ class Database:
                 "input_files": input_files,
                 "output_file": row[7],
                 "errors": errors,
-                "metadata": metadata
+                "metadata": metadata,
+                "last_api_refresh": row[10]
             }
             jobs.append(job_info)
 

@@ -38,7 +38,7 @@ MAX_RETRIES_LIMIT = 10
 TEXT_PREVIEW_LENGTH = 200
 """Length of text preview shown in results display."""
 
-TABLE_SEPARATOR_LENGTH = 70
+TABLE_SEPARATOR_LENGTH = 90
 """Length of separator lines in table displays."""
 
 JOB_ID_COLUMN_WIDTH = 36
@@ -49,6 +49,9 @@ STATUS_COLUMN_WIDTH = 12
 
 SUBMITTED_COLUMN_WIDTH = 20
 """Column width for submission time in table displays."""
+
+API_REFRESH_COLUMN_WIDTH = 20
+"""Column width for API refresh timestamp in table displays."""
 
 JSON_INDENT_SPACES = 2
 """Number of spaces for JSON indentation in pretty-printing."""
