@@ -299,6 +299,135 @@ def _api_upload_file(self, file_path: pathlib.Path, purpose: str):
 - **Non-Retryable Errors**: Authentication, validation, client errors (4xx)
 - **Fatal Errors**: Configuration errors, file system issues
 
+## Logging and Audit Architecture
+
+The logging system provides comprehensive observability through structured logging, audit trails, and performance monitoring.
+
+### Logging Component Hierarchy
+
+```
+                              ┌─────────────────┐
+                              │   Core Logger   │
+                              │ (structlog)     │
+                              └─────────┬───────┘
+                                        │
+                      ┌─────────────────┼─────────────────┐
+                      ▼                 ▼                 ▼
+            ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+            │  AuditLogger    │ │ SecurityLogger  │ │PerformanceLogger│
+            │                 │ │                 │ │                 │
+            │ • Events        │ │ • Auth Events   │ │ • Timing        │
+            │ • Operations    │ │ • Data Access   │ │ • Metrics       │
+            │ • Context       │ │ • Config Change │ │ • Resource Use  │
+            └─────────────────┘ └─────────────────┘ └─────────────────┘
+```
+
+### Audit Event Types
+
+```python
+class AuditEventType(Enum):
+    # User Actions
+    CLI_COMMAND = "cli_command"
+    CONFIG_CHANGE = "config_change"
+    
+    # File Operations  
+    FILE_SUBMISSION = "file_submission"
+    FILE_DOWNLOAD = "file_download"
+    FILE_ACCESS = "file_access"
+    
+    # API Operations
+    API_REQUEST = "api_request"
+    BATCH_SUBMISSION = "batch_submission"
+    JOB_OPERATION = "job_operation"
+    
+    # System Events
+    APPLICATION_START = "application_start"
+    AUTHENTICATION = "authentication"
+    ERROR_RECOVERY = "error_recovery"
+```
+
+### Log Processing Pipeline
+
+```python
+# Structured log processing with automatic enrichment
+class AuditProcessor:
+    def __call__(self, event_dict):
+        # Add audit metadata
+        if self.is_audit_event(event_dict):
+            event_dict['audit_trail'] = True
+            
+        # Sanitize sensitive data  
+        if 'api_key' in event_dict:
+            event_dict['api_key_hash'] = hash_key(event_dict['api_key'])
+            del event_dict['api_key']
+            
+        return event_dict
+```
+
+### Log File Strategy
+
+- **Rotation**: 50MB max per file, 5 backup retention
+- **Format**: JSON for structured analysis, colored console for development
+- **Separation**: Specialized files for audit, security, performance
+- **Location**: XDG-compliant state directory (`~/.local/state/mistral-ocr/`)
+
+### Session Correlation
+
+All operations within a CLI session share a session ID for traceability:
+
+```python
+class AuditLogger:
+    def __init__(self, component: str):
+        self.session_id = str(uuid.uuid4())[:8]
+        
+    def audit(self, event_type, message, **context):
+        log_data = {
+            'session_id': self.session_id,
+            'component': component,
+            'event_type': event_type.value,
+            **context
+        }
+```
+
+### Performance Monitoring
+
+```python
+@contextmanager
+def operation_context(operation: str, resource_id: str = None):
+    start_time = time.time()
+    operation_id = str(uuid.uuid4())[:8]
+    
+    audit_logger.audit(
+        AuditEventType.DATA_PROCESSING,
+        f"Starting {operation}",
+        operation_id=operation_id,
+        resource_id=resource_id
+    )
+    
+    try:
+        yield {"operation_id": operation_id}
+        
+        duration = time.time() - start_time
+        audit_logger.audit(
+            AuditEventType.DATA_PROCESSING,
+            f"Completed {operation}",
+            operation_id=operation_id,
+            outcome="success",
+            duration_seconds=duration
+        )
+    except Exception as e:
+        # Log failure with error context
+        audit_logger.audit(
+            AuditEventType.DATA_PROCESSING,
+            f"Failed {operation}: {str(e)}",
+            level="error",
+            operation_id=operation_id,
+            outcome="failure",
+            error_type=type(e).__name__
+        )
+        raise
+```
+
 ## Async and Concurrency Architecture
 
 ### Concurrent Processing

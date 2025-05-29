@@ -30,6 +30,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Set monitor interval: `uv run python -m mistral_ocr --config-set-monitor-interval 10`
 - Reset to defaults: `uv run python -m mistral_ocr --config reset`
 
+### Logging and Monitoring
+- Log files location: `~/.local/state/mistral-ocr/`
+  - `mistral.log` - Main application log
+  - `audit.log` - Audit trail events
+  - `security.log` - Authentication and security events
+  - `performance.log` - Performance metrics and timing
+- Monitor real-time: `tail -f ~/.local/state/mistral-ocr/mistral.log`
+- Analyze with jq: `jq 'select(.outcome == "failure")' ~/.local/state/mistral-ocr/audit.log`
+
 ## Architecture
 
 This is a Python CLI tool for submitting OCR batches to the Mistral API. The architecture follows a structured 7-phase development process defined in `PROCESS.md` that must be followed in order:
@@ -48,7 +57,8 @@ This is a Python CLI tool for submitting OCR batches to the Mistral API. The arc
 - **Configuration**: `ConfigurationManager` for settings
 - **Database**: Local job tracking and document management
 - **Progress Tracking**: `ProgressManager` for real-time UI updates (Rich library)
-- **Logging**: Structured logging with file output
+- **Audit System**: Comprehensive logging and audit trails (`audit.py`)
+- **Error Recovery**: Retry mechanisms with exponential backoff (`retry_manager.py`)
 
 ### Key Features
 - Submit individual files or directories (with recursive option)
@@ -59,6 +69,9 @@ This is a Python CLI tool for submitting OCR batches to the Mistral API. The arc
 - Configuration management via CLI commands
 - Real-time progress tracking with Rich UI components
 - Live job monitoring with status change notifications
+- Comprehensive audit trails and security logging
+- Enterprise-grade error recovery and retry mechanisms
+- Performance monitoring and metrics collection
 - Support for PNG, JPEG, and PDF files
 
 ## Development Rules

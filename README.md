@@ -13,6 +13,8 @@ A Python CLI tool for submitting documents to the Mistral OCR service, managing 
 - **Result Retrieval**: Download OCR results in text and markdown formats
 - **Configuration Management**: CLI commands for API key, model, and directory settings
 - **Progress Monitoring**: Real-time progress bars and status updates during processing
+- **Comprehensive Logging**: Enterprise-grade audit trails, security events, and performance metrics
+- **Error Recovery**: Automatic retry with exponential backoff for transient failures
 - **XDG Compliance**: Follows XDG Base Directory specification for config and data
 
 ## Installation
@@ -79,6 +81,164 @@ uv run python -m mistral_ocr --config-set-progress-enabled false
 # Set job monitoring refresh interval (1-300 seconds, default: 10)
 uv run python -m mistral_ocr --config-set-monitor-interval 5
 ```
+
+### Logging and Audit Trails
+
+Mistral OCR provides comprehensive logging and audit trails for enterprise use, compliance, and debugging. All operations are tracked with structured logs including timing, outcomes, and context.
+
+#### Log Files Location
+
+Logs are stored in the XDG-compliant data directory:
+
+```bash
+# Default log locations
+~/.local/share/mistral-ocr/mistral.log      # Main application log
+~/.local/share/mistral-ocr/audit.log        # Audit trail events
+~/.local/share/mistral-ocr/security.log     # Authentication & security events
+~/.local/share/mistral-ocr/performance.log  # Performance metrics & timing
+```
+
+#### Log Configuration
+
+The logging system automatically configures:
+- **Log Rotation**: 50MB max per file, 5 backup files retained
+- **Structured Format**: JSON format for programmatic analysis
+- **Console Output**: Colored, human-readable format for terminals
+- **Security**: API keys are automatically hashed, never logged in plain text
+
+#### What Gets Logged
+
+**Audit Events:**
+- CLI command execution with full parameters and timing
+- Configuration changes (API key, model, directories)
+- Authentication events and client initialization
+- File operations (submission, download, access)
+- Job lifecycle (creation, status changes, completion)
+- Error recovery and retry attempts
+
+**Security Events:**
+- API key validation and authentication outcomes
+- Data access patterns and file operations
+- Configuration modifications with before/after context
+- Failed authentication attempts
+
+**Performance Metrics:**
+- Operation timing and duration
+- Batch processing throughput
+- API request/response times
+- Resource usage (memory, disk, network)
+- Concurrent operation efficiency
+
+#### Example Log Outputs
+
+**CLI Command Audit:**
+```json
+{
+  "event": "Started mistral-ocr CLI",
+  "level": "info",
+  "timestamp": "2025-05-29T12:33:00Z",
+  "event_type": "application_start",
+  "component": "cli",
+  "session_id": "bcdff1c8",
+  "operation": "submit:documents/",
+  "outcome": "success",
+  "version": "0.6.0",
+  "args": {
+    "submit": "documents/",
+    "recursive": true,
+    "document_name": "Invoice_Batch_2024"
+  }
+}
+```
+
+**Authentication Event:**
+```json
+{
+  "event": "Authentication: API key loaded from configuration/environment",
+  "level": "info",
+  "timestamp": "2025-05-29T12:33:01Z",
+  "security": true,
+  "component": "client.security",
+  "authentication_event": "API key loaded from configuration/environment",
+  "outcome": "success",
+  "api_key_hash": "a1b2c3d4e5f6g7h8"
+}
+```
+
+**Performance Metrics:**
+```json
+{
+  "event": "Performance: batch_submission",
+  "level": "info",
+  "timestamp": "2025-05-29T12:33:15Z",
+  "performance": true,
+  "component": "submission_manager.performance",
+  "operation": "batch_submission",
+  "duration_seconds": 14.527,
+  "resource_count": 125,
+  "resource_size_bytes": 52428800,
+  "throughput_items_per_second": 8.62
+}
+```
+
+**Operation Context:**
+```json
+{
+  "event": "Completed document_submission",
+  "level": "info", 
+  "timestamp": "2025-05-29T12:33:15Z",
+  "event_type": "file_submission",
+  "component": "submission_manager",
+  "session_id": "bcdff1c8",
+  "operation": "document_submission",
+  "operation_id": "f4a8b2c1",
+  "resource_id": "Document_Invoice_Batch_2024",
+  "outcome": "success",
+  "duration_seconds": 14.527,
+  "batch_count": 2,
+  "file_count": 125,
+  "job_ids": ["job_123", "job_124"]
+}
+```
+
+#### Viewing Logs
+
+**Real-time monitoring:**
+```bash
+# Monitor main application log
+tail -f ~/.local/share/mistral-ocr/mistral.log
+
+# Watch audit events in real-time  
+tail -f ~/.local/share/mistral-ocr/audit.log | jq '.'
+
+# Monitor security events
+tail -f ~/.local/share/mistral-ocr/security.log | jq '.'
+```
+
+**Log analysis with jq:**
+```bash
+# Find all failed operations
+jq 'select(.outcome == "failure")' ~/.local/share/mistral-ocr/audit.log
+
+# Get performance metrics for specific operations
+jq 'select(.performance == true and .operation == "batch_submission")' \
+   ~/.local/share/mistral-ocr/performance.log
+
+# Track a specific session
+jq 'select(.session_id == "bcdff1c8")' ~/.local/share/mistral-ocr/mistral.log
+
+# Authentication events summary
+jq 'select(.security == true) | {timestamp, event, outcome}' \
+   ~/.local/share/mistral-ocr/security.log
+```
+
+#### Enterprise Features
+
+- **Session Correlation**: All operations within a CLI session share a session ID for debugging
+- **Audit Compliance**: Complete operation trails with timing and outcomes
+- **Security Monitoring**: Authentication events, failed access attempts, configuration changes
+- **Performance Insights**: Detailed metrics for optimization and capacity planning
+- **Error Context**: Rich error information with retry attempts and recovery actions
 
 **Configuration File Location**: `~/.config/mistral-ocr/config.json` (follows XDG Base Directory specification)
 
@@ -287,7 +447,15 @@ mypy src/
 The tool follows XDG Base Directory specification:
 
 - **Config**: `~/.config/mistral-ocr/` (or `$XDG_CONFIG_HOME/mistral-ocr/`)
+  - `config.json` - Application configuration settings
 - **Data**: `~/.local/share/mistral-ocr/` (or `$XDG_DATA_HOME/mistral-ocr/`)
+  - `downloads/` - Downloaded OCR results
+  - `mistral_ocr.db` - SQLite database for job tracking
+- **State**: `~/.local/state/mistral-ocr/` (or `$XDG_STATE_HOME/mistral-ocr/`)
+  - `mistral.log` - Main application log
+  - `audit.log` - Audit trail events  
+  - `security.log` - Authentication and security events
+  - `performance.log` - Performance metrics and timing
 - **Cache**: `~/.cache/mistral-ocr/` (or `$XDG_CACHE_HOME/mistral-ocr/`)
 
 ## Help
