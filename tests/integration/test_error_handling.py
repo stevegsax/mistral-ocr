@@ -582,7 +582,7 @@ class TestAPIRateLimiting:
 
             for job_id in job_ids:
                 try:
-                    status = client.check_job_status(job_id)
+                    client.check_job_status(job_id)
                     successful_checks += 1
                 except JobError:
                     failed_checks += 1

@@ -32,7 +32,7 @@ class TestCLISubcommands:
         """Test that main help shows available subcommands."""
         result = run_cli("--help")
         assert result.returncode == 0
-        
+
         # Check for main subcommands
         assert "submit" in result.stdout
         assert "jobs" in result.stdout
@@ -44,7 +44,7 @@ class TestCLISubcommands:
         """Test submit subcommand help."""
         result = run_cli("submit", "--help")
         assert result.returncode == 0
-        
+
         # Check for submit-specific options
         assert "path" in result.stdout.lower()
         assert "--recursive" in result.stdout
@@ -56,7 +56,7 @@ class TestCLISubcommands:
         """Test jobs subcommand help."""
         result = run_cli("jobs", "--help")
         assert result.returncode == 0
-        
+
         # Check for jobs sub-subcommands
         assert "list" in result.stdout
         assert "status" in result.stdout
@@ -66,7 +66,7 @@ class TestCLISubcommands:
         """Test jobs status subcommand help."""
         result = run_cli("jobs", "status", "--help")
         assert result.returncode == 0
-        
+
         # Check for job_id parameter
         assert "job_id" in result.stdout.lower()
 
@@ -74,7 +74,7 @@ class TestCLISubcommands:
         """Test results subcommand help."""
         result = run_cli("results", "--help")
         assert result.returncode == 0
-        
+
         # Check for results sub-subcommands
         assert "get" in result.stdout
         assert "download" in result.stdout
@@ -83,7 +83,7 @@ class TestCLISubcommands:
         """Test results download subcommand help."""
         result = run_cli("results", "download", "--help")
         assert result.returncode == 0
-        
+
         # Check for job_id parameter and output option
         assert "job_id" in result.stdout.lower()
         assert "--output" in result.stdout
@@ -92,7 +92,7 @@ class TestCLISubcommands:
         """Test documents subcommand help."""
         result = run_cli("documents", "--help")
         assert result.returncode == 0
-        
+
         # Check for documents sub-subcommands
         assert "query" in result.stdout
         assert "download" in result.stdout
@@ -101,7 +101,7 @@ class TestCLISubcommands:
         """Test config subcommand help."""
         result = run_cli("config", "--help")
         assert result.returncode == 0
-        
+
         # Check for config sub-subcommands
         assert "show" in result.stdout
         assert "reset" in result.stdout
@@ -111,7 +111,7 @@ class TestCLISubcommands:
         """Test config set subcommand help."""
         result = run_cli("config", "set", "--help")
         assert result.returncode == 0
-        
+
         # Check for configuration keys
         assert "api-key" in result.stdout
         assert "model" in result.stdout
@@ -129,7 +129,7 @@ class TestCLISubcommands:
         result = run_cli("jobs")
         assert result.returncode != 0 or "usage" in result.stdout.lower()
 
-        # Test results without action  
+        # Test results without action
         result = run_cli("results")
         assert result.returncode != 0 or "usage" in result.stdout.lower()
 

@@ -122,14 +122,14 @@ class TestCompleteOCRWorkflow:
         # Create first batch
         job_id_1 = client.submit_documents([test_files[0]], document_name="Shared Document")
 
-        # Get the document UUID from the job details
-        details_1 = client.get_job_details(job_id_1)
+        # Ensure job details are retrievable
+        client.get_job_details(job_id_1)
 
         # Create second batch using the same document name (should associate with same document)
         job_id_2 = client.submit_documents([test_files[1]], document_name="Shared Document")
 
         # Both jobs should be associated with the same document
-        details_2 = client.get_job_details(job_id_2)
+        client.get_job_details(job_id_2)
 
         # Query document status should return both job statuses
         doc_statuses = client.query_document_status("Shared Document")
@@ -169,7 +169,7 @@ class TestCompleteOCRWorkflow:
         if client.mock_mode:
             # Mock mode may not raise for non-existent jobs due to implementation
             try:
-                results = client.get_results("non-existent-job-id")
+                client.get_results("non-existent-job-id")
                 # If it doesn't raise, that's also valid behavior for mock mode
             except Exception:
                 # If it raises any exception, that's also valid
@@ -250,7 +250,7 @@ class TestBatchProcessingWorkflow:
     def test_batch_status_tracking(self, client, large_file_set):
         """Test status tracking across multiple batches."""
         # Submit files that will create multiple batches
-        result = client.submit_documents(large_file_set[:50], document_name="Batch Status Test")
+        client.submit_documents(large_file_set[:50], document_name="Batch Status Test")
 
         # Get all jobs for the document
         doc_statuses = client.query_document_status("Batch Status Test")

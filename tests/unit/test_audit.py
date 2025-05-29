@@ -1,7 +1,6 @@
 """Comprehensive tests for the audit trail and logging system."""
 
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -32,7 +31,7 @@ class TestAuditEventType:
             "file_download",
             "file_access",
             "api_request",
-            "api_response", 
+            "api_response",
             "batch_submission",
             "job_operation",
             "application_start",
@@ -43,7 +42,7 @@ class TestAuditEventType:
             "data_processing",
             "result_retrieval",
         }
-        
+
         actual_types = {event.value for event in AuditEventType}
         assert actual_types == expected_types
 
@@ -86,18 +85,14 @@ class TestAuditLogger:
 
     def test_audit_basic_event(self, audit_logger, mock_logger):
         """Test basic audit event logging."""
-        audit_logger.audit(
-            AuditEventType.CLI_COMMAND,
-            "Test message",
-            operation="test_operation"
-        )
+        audit_logger.audit(AuditEventType.CLI_COMMAND, "Test message", operation="test_operation")
 
         mock_logger.info.assert_called_once()
         call_args = mock_logger.info.call_args
-        
+
         # Check message
         assert call_args[0][0] == "Test message"
-        
+
         # Check structured data
         kwargs = call_args[1]
         assert kwargs["event_type"] == "cli_command"
@@ -111,7 +106,7 @@ class TestAuditLogger:
     def test_audit_with_all_parameters(self, audit_logger, mock_logger):
         """Test audit logging with all parameters."""
         details = {"key": "value", "count": 42}
-        
+
         audit_logger.audit(
             AuditEventType.AUTHENTICATION,
             "Authentication event",
@@ -121,12 +116,12 @@ class TestAuditLogger:
             operation="login_attempt",
             outcome="failure",
             details=details,
-            extra_field="extra_value"
+            extra_field="extra_value",
         )
 
         call_args = mock_logger.warning.call_args
         kwargs = call_args[1]
-        
+
         assert kwargs["event_type"] == "authentication"
         assert kwargs["user_id"] == "user123"
         assert kwargs["resource_id"] == "resource456"
@@ -142,12 +137,12 @@ class TestAuditLogger:
             "Processing event",
             user_id=None,
             resource_id="resource123",
-            operation=None
+            operation=None,
         )
 
         call_args = mock_logger.info.call_args
         kwargs = call_args[1]
-        
+
         assert "user_id" not in kwargs
         assert "operation" not in kwargs
         assert kwargs["resource_id"] == "resource123"
@@ -155,56 +150,56 @@ class TestAuditLogger:
     def test_audit_timestamp_format(self, audit_logger, mock_logger):
         """Test that timestamp is in ISO format."""
         audit_logger.audit(AuditEventType.APPLICATION_START, "Start event")
-        
+
         call_args = mock_logger.info.call_args
         timestamp = call_args[1]["timestamp"]
-        
+
         # Should be parseable as ISO format
-        parsed = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         assert isinstance(parsed, datetime)
 
     def test_info_logging(self, audit_logger, mock_logger):
         """Test info level logging with audit context."""
         audit_logger.info("Info message", extra_data="value")
-        
+
         mock_logger.info.assert_called_once_with(
             "Info message",
             component="test_component",
             session_id=audit_logger._session_id,
-            extra_data="value"
+            extra_data="value",
         )
 
     def test_debug_logging(self, audit_logger, mock_logger):
         """Test debug level logging with audit context."""
         audit_logger.debug("Debug message", debug_info=True)
-        
+
         mock_logger.debug.assert_called_once_with(
             "Debug message",
             component="test_component",
             session_id=audit_logger._session_id,
-            debug_info=True
+            debug_info=True,
         )
 
     def test_warning_logging(self, audit_logger, mock_logger):
         """Test warning level logging with audit context."""
         audit_logger.warning("Warning message", warning_code=123)
-        
+
         mock_logger.warning.assert_called_once_with(
             "Warning message",
             component="test_component",
             session_id=audit_logger._session_id,
-            warning_code=123
+            warning_code=123,
         )
 
     def test_error_logging(self, audit_logger, mock_logger):
         """Test error level logging with audit context."""
         audit_logger.error("Error message", error_code=500)
-        
+
         mock_logger.error.assert_called_once_with(
             "Error message",
             component="test_component",
             session_id=audit_logger._session_id,
-            error_code=500
+            error_code=500,
         )
 
     def test_operation_context_success(self, audit_logger, mock_logger):
@@ -213,7 +208,7 @@ class TestAuditLogger:
             "test_operation",
             AuditEventType.DATA_PROCESSING,
             resource_id="resource123",
-            batch_size=100
+            batch_size=100,
         ) as context:
             # Simulate work
             time.sleep(0.01)
@@ -222,7 +217,7 @@ class TestAuditLogger:
 
         # Should have two calls: start and completion
         assert mock_logger.info.call_count == 2
-        
+
         # Check start call
         start_call = mock_logger.info.call_args_list[0]
         assert "Starting test_operation" in start_call[0][0]
@@ -231,7 +226,7 @@ class TestAuditLogger:
         assert start_kwargs["operation"] == "test_operation"
         assert start_kwargs["resource_id"] == "resource123"
         assert start_kwargs["batch_size"] == 100
-        
+
         # Check completion call
         completion_call = mock_logger.info.call_args_list[1]
         assert "Completed test_operation" in completion_call[0][0]
@@ -243,19 +238,17 @@ class TestAuditLogger:
     def test_operation_context_failure(self, audit_logger, mock_logger):
         """Test operation context manager for failed operations."""
         test_exception = ValueError("Test error")
-        
+
         with pytest.raises(ValueError):
             with audit_logger.operation_context(
-                "failing_operation",
-                AuditEventType.API_REQUEST,
-                resource_id="resource456"
+                "failing_operation", AuditEventType.API_REQUEST, resource_id="resource456"
             ):
                 raise test_exception
 
         # Should have two calls: start and failure
         assert mock_logger.info.call_count == 1  # Start
         assert mock_logger.error.call_count == 1  # Failure
-        
+
         # Check failure call
         failure_call = mock_logger.error.call_args
         assert "Failed failing_operation: Test error" in failure_call[0][0]
@@ -289,10 +282,10 @@ class TestPerformanceLogger:
     def test_timing_basic(self, perf_logger, mock_logger):
         """Test basic timing information logging."""
         perf_logger.timing("test_operation", 2.5)
-        
+
         mock_logger.info.assert_called_once()
         call_args = mock_logger.info.call_args
-        
+
         assert call_args[0][0] == "Performance: test_operation"
         kwargs = call_args[1]
         assert kwargs["performance"] is True
@@ -306,15 +299,15 @@ class TestPerformanceLogger:
             "batch_processing",
             15.75,
             resource_count=100,
-            resource_size=1024*1024*50,  # 50MB
+            resource_size=1024 * 1024 * 50,  # 50MB
             throughput=6.67,
             memory_usage=128.5,
-            cpu_percent=85.2
+            cpu_percent=85.2,
         )
-        
+
         call_args = mock_logger.info.call_args
         kwargs = call_args[1]
-        
+
         assert kwargs["duration_seconds"] == 15.75
         assert kwargs["resource_count"] == 100
         assert kwargs["resource_size_bytes"] == 50 * 1024 * 1024
@@ -325,16 +318,12 @@ class TestPerformanceLogger:
     def test_timing_removes_none_values(self, perf_logger, mock_logger):
         """Test that None values are removed from performance data."""
         perf_logger.timing(
-            "operation",
-            1.0,
-            resource_count=None,
-            resource_size=1024,
-            throughput=None
+            "operation", 1.0, resource_count=None, resource_size=1024, throughput=None
         )
-        
+
         call_args = mock_logger.info.call_args
         kwargs = call_args[1]
-        
+
         assert "resource_count" not in kwargs
         assert "throughput_items_per_second" not in kwargs
         assert kwargs["resource_size_bytes"] == 1024
@@ -342,10 +331,10 @@ class TestPerformanceLogger:
     def test_resource_usage_basic(self, perf_logger, mock_logger):
         """Test basic resource usage logging."""
         perf_logger.resource_usage("file_processing")
-        
+
         mock_logger.info.assert_called_once()
         call_args = mock_logger.info.call_args
-        
+
         assert call_args[0][0] == "Resource Usage: file_processing"
         kwargs = call_args[1]
         assert kwargs["resource_usage"] is True
@@ -360,12 +349,12 @@ class TestPerformanceLogger:
             cpu_percent=42.3,
             disk_usage_mb=1024.0,
             network_io_mb=15.5,
-            active_threads=8
+            active_threads=8,
         )
-        
+
         call_args = mock_logger.info.call_args
         kwargs = call_args[1]
-        
+
         assert kwargs["memory_mb"] == 256.7
         assert kwargs["cpu_percent"] == 42.3
         assert kwargs["disk_usage_mb"] == 1024.0
@@ -399,12 +388,12 @@ class TestSecurityLogger:
             "API key validation",
             outcome="success",
             api_key_hash="a1b2c3d4e5f6",
-            validation_details={"method": "environment"}
+            validation_details={"method": "environment"},
         )
-        
+
         mock_logger.info.assert_called_once()
         call_args = mock_logger.info.call_args
-        
+
         assert call_args[0][0] == "Authentication: API key validation"
         kwargs = call_args[1]
         assert kwargs["security"] is True
@@ -417,14 +406,12 @@ class TestSecurityLogger:
     def test_authentication_event_failure(self, security_logger, mock_logger):
         """Test failed authentication event logging."""
         security_logger.authentication_event(
-            "Invalid API key",
-            outcome="failure",
-            validation_details={"error": "key_not_found"}
+            "Invalid API key", outcome="failure", validation_details={"error": "key_not_found"}
         )
-        
+
         mock_logger.warning.assert_called_once()
         call_args = mock_logger.warning.call_args
-        
+
         assert call_args[0][0] == "Authentication: Invalid API key"
         kwargs = call_args[1]
         assert kwargs["outcome"] == "failure"
@@ -436,12 +423,12 @@ class TestSecurityLogger:
             "Login attempt",
             api_key_hash=None,
             validation_details={"method": "config"},
-            user_context=None
+            user_context=None,
         )
-        
+
         call_args = mock_logger.info.call_args
         kwargs = call_args[1]
-        
+
         assert "api_key_hash" not in kwargs
         assert "user_context" not in kwargs
         assert kwargs["validation_details"] == {"method": "config"}
@@ -449,18 +436,18 @@ class TestSecurityLogger:
     def test_data_access_success(self, security_logger, mock_logger):
         """Test successful data access event logging."""
         test_path = Path("/tmp/test_file.pdf")
-        
+
         security_logger.data_access(
             "file",
             "read",
             resource_path=test_path,
-            file_size=1024*1024,  # 1MB
-            outcome="success"
+            file_size=1024 * 1024,  # 1MB
+            outcome="success",
         )
-        
+
         mock_logger.info.assert_called_once()
         call_args = mock_logger.info.call_args
-        
+
         assert call_args[0][0] == "Data Access: file read"
         kwargs = call_args[1]
         assert kwargs["security"] is True
@@ -468,21 +455,16 @@ class TestSecurityLogger:
         assert kwargs["resource"] == "file"
         assert kwargs["action"] == "read"
         assert kwargs["resource_path"] == str(test_path)
-        assert kwargs["file_size_bytes"] == 1024*1024
+        assert kwargs["file_size_bytes"] == 1024 * 1024
         assert kwargs["outcome"] == "success"
 
     def test_data_access_failure(self, security_logger, mock_logger):
         """Test failed data access event logging."""
-        security_logger.data_access(
-            "database",
-            "write",
-            outcome="failure",
-            error_code=403
-        )
-        
+        security_logger.data_access("database", "write", outcome="failure", error_code=403)
+
         mock_logger.warning.assert_called_once()
         call_args = mock_logger.warning.call_args
-        
+
         assert call_args[0][0] == "Data Access: database write"
         kwargs = call_args[1]
         assert kwargs["outcome"] == "failure"
@@ -491,16 +473,12 @@ class TestSecurityLogger:
     def test_data_access_removes_none(self, security_logger, mock_logger):
         """Test that None values are removed from data access logs."""
         security_logger.data_access(
-            "api",
-            "request",
-            resource_path=None,
-            file_size=None,
-            request_id="req123"
+            "api", "request", resource_path=None, file_size=None, request_id="req123"
         )
-        
+
         call_args = mock_logger.info.call_args
         kwargs = call_args[1]
-        
+
         assert "resource_path" not in kwargs
         assert "file_size_bytes" not in kwargs
         assert kwargs["request_id"] == "req123"
@@ -544,23 +522,22 @@ class TestAuditIntegration:
     def test_audit_logger_with_real_structlog(self):
         """Test AuditLogger with actual structlog integration."""
         # This test uses real structlog but with a test logger
-        import structlog
         from io import StringIO
-        
+
+        import structlog
+
         output = StringIO()
         structlog.configure(
             processors=[structlog.processors.JSONRenderer()],
             logger_factory=lambda name: output,  # Accept name parameter
             cache_logger_on_first_use=False,
         )
-        
+
         logger = AuditLogger("integration_test")
         logger.audit(
-            AuditEventType.APPLICATION_START,
-            "Integration test message",
-            test_data={"key": "value"}
+            AuditEventType.APPLICATION_START, "Integration test message", test_data={"key": "value"}
         )
-        
+
         # The output should contain JSON-formatted log data
         log_output = output.getvalue()
         assert "integration_test" in log_output
@@ -569,11 +546,11 @@ class TestAuditIntegration:
 
     def test_concurrent_audit_logging(self):
         """Test that audit logging works correctly with concurrent access."""
-        import threading
         import queue
-        
+        import threading
+
         results = queue.Queue()
-        
+
         def log_events(component_id):
             with patch("mistral_ocr.audit.get_logger") as mock_logger:
                 mock_logger.return_value = MagicMock()
@@ -581,33 +558,31 @@ class TestAuditIntegration:
                 logger.logger = mock_logger.return_value  # Use the mocked logger
                 for i in range(10):
                     logger.audit(
-                        AuditEventType.DATA_PROCESSING,
-                        f"Event {i}",
-                        operation=f"operation_{i}"
+                        AuditEventType.DATA_PROCESSING, f"Event {i}", operation=f"operation_{i}"
                     )
                 results.put((component_id, logger._session_id, logger.logger.info.call_count))
-        
+
         # Start multiple threads
         threads = []
         for i in range(3):
             thread = threading.Thread(target=log_events, args=(i,))
             threads.append(thread)
             thread.start()
-        
+
         # Wait for completion
         for thread in threads:
             thread.join()
-        
+
         # Verify results
         thread_results = []
         while not results.empty():
             thread_results.append(results.get())
-        
+
         assert len(thread_results) == 3
-        
+
         # Each thread should have unique session ID and 10 log calls
         session_ids = {result[1] for result in thread_results}
         assert len(session_ids) == 3  # All unique
-        
+
         for component_id, session_id, call_count in thread_results:
             assert call_count == 10
