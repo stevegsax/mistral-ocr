@@ -231,6 +231,15 @@ class ResultManager:
                 text_file = job_dir / f"{result.file_name}_{i:03d}.txt"
                 FileIOUtils.write_text_file(text_file, result.text)
 
+                if doc_info:
+                    self.database.store_download(
+                        text_path=str(text_file),
+                        markdown_path=str(output_file),
+                        document_uuid=doc_info[0],
+                        job_id=job_id,
+                        document_order=i,
+                    )
+
             self.logger.info(f"Downloaded {len(results)} results to {job_dir}")
 
         except Exception as e:
