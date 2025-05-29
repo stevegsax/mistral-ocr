@@ -22,36 +22,34 @@ if TYPE_CHECKING:
 # Helper functions
 def format_timestamp(timestamp: Optional[str]) -> str:
     """Format timestamp for display, showing 'Never' if None.
-    
+
     Args:
         timestamp: ISO timestamp string or None
-        
+
     Returns:
         Formatted timestamp or 'Never'
     """
     if not timestamp:
         return "Never"
-    
+
     # Extract just the date and time part (remove microseconds and timezone)
     try:
         # Handle formats like '2024-01-01 12:34:56' or '2024-01-01T12:34:56.123Z'
-        if 'T' in timestamp:
-            date_time = timestamp.split('T')
+        if "T" in timestamp:
+            date_time = timestamp.split("T")
             date_part = date_time[0]
-            time_part = date_time[1].split('.')[0]  # Remove microseconds
+            time_part = date_time[1].split(".")[0]  # Remove microseconds
             return f"{date_part} {time_part}"
         else:
             # Already in 'YYYY-MM-DD HH:MM:SS' format
-            return timestamp.split('.')[0]  # Remove microseconds if present
+            return timestamp.split(".")[0]  # Remove microseconds if present
     except (IndexError, ValueError):
         return timestamp  # Return as-is if parsing fails
 
 
 # Command handler functions
 def handle_submit_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient', 
-    settings: 'Settings'
+    args: argparse.Namespace, client: "MistralOCRClient", settings: "Settings"
 ) -> None:
     """Handle document submission command."""
     file_path = pathlib.Path(args.submit)
@@ -73,19 +71,13 @@ def handle_submit_command(
         print(f"Submitted job: {job_id}")
 
 
-def handle_job_status_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_job_status_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle job status check command."""
     status = client.check_job_status(args.check_job)
     print(f"Job {args.check_job} status: {status}")
 
 
-def handle_document_query_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_document_query_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle document status query command."""
     statuses = client.query_document_status(args.query_document)
     print(f"Document '{args.query_document}' job statuses:")
@@ -93,10 +85,7 @@ def handle_document_query_command(
         print(f"  Job {i}: {status}")
 
 
-def handle_cancel_job_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_cancel_job_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle job cancellation command."""
     success = client.cancel_job(args.cancel_job)
     if success:
@@ -105,10 +94,7 @@ def handle_cancel_job_command(
         print(f"Failed to cancel job {args.cancel_job}")
 
 
-def handle_list_jobs_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_list_jobs_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle jobs listing command."""
     jobs = client.list_all_jobs()
     if not jobs:
@@ -123,11 +109,11 @@ def handle_list_jobs_command(
         )
         print(header)
         print("-" * TABLE_SEPARATOR_LENGTH)
-        
+
         for job in jobs:
             api_refresh = format_timestamp(job.last_api_refresh)
             submitted = format_timestamp(job.submitted)
-            
+
             row = (
                 f"{job.id:<{JOB_ID_COLUMN_WIDTH}} "
                 f"{job.status:<{STATUS_COLUMN_WIDTH}} "
@@ -137,10 +123,7 @@ def handle_list_jobs_command(
             print(row)
 
 
-def handle_job_details_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_job_details_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle detailed job status command."""
     try:
         job_details = client.get_job_details(args.job_status)
@@ -155,25 +138,26 @@ def handle_job_details_command(
             print(f"Last API Refresh: {job_details['last_api_refresh']}")
         if job_details.get("error"):
             print(f"Error: {job_details['error']}")
-            
+
         # Show API response details if available (for debugging)
         if job_details.get("api_response_json") and args.job_status:
             import json
+
             try:
                 api_data = json.loads(job_details["api_response_json"])
                 print("\nAPI Response Details:")
                 print(f"  Refresh Time: {api_data.get('refresh_timestamp', 'N/A')}")
-                if api_data.get('created_at'):
+                if api_data.get("created_at"):
                     print(f"  Created: {api_data['created_at']}")
-                if api_data.get('completed_at'):
+                if api_data.get("completed_at"):
                     print(f"  Completed: {api_data['completed_at']}")
-                if api_data.get('output_file'):
+                if api_data.get("output_file"):
                     print(f"  Output File: {api_data['output_file']}")
-                if api_data.get('errors'):
+                if api_data.get("errors"):
                     print(f"  Errors: {api_data['errors']}")
             except json.JSONDecodeError:
                 pass  # Skip if JSON is invalid
-                
+
     except MistralOCRError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -182,22 +166,20 @@ def handle_job_details_command(
         sys.exit(1)
 
 
-def handle_get_results_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_get_results_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle results retrieval command."""
     results = client.get_results(args.get_results)
     print(f"Results for job {args.get_results}: {len(results)} items")
     for i, result in enumerate(results, 1):
         print(f"\n--- Result {i} ({result.file_name}) ---")
-        print(result.text[:TEXT_PREVIEW_LENGTH] + "..." if len(result.text) > TEXT_PREVIEW_LENGTH else result.text)
+        print(
+            result.text[:TEXT_PREVIEW_LENGTH] + "..."
+            if len(result.text) > TEXT_PREVIEW_LENGTH
+            else result.text
+        )
 
 
-def handle_download_results_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_download_results_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle results download command."""
     destination = None
     if args.download_to:
@@ -207,10 +189,7 @@ def handle_download_results_command(
     print(f"Downloaded results for job {args.download_results}")
 
 
-def handle_download_document_command(
-    args: argparse.Namespace, 
-    client: 'MistralOCRClient'
-) -> None:
+def handle_download_document_command(args: argparse.Namespace, client: "MistralOCRClient") -> None:
     """Handle document download command."""
     destination = None
     if args.download_to:
@@ -220,23 +199,102 @@ def handle_download_document_command(
     print(f"Downloaded all results for document {args.download_document}")
 
 
+def handle_config_command(args: argparse.Namespace, settings: "Settings") -> None:
+    """Handle configuration management commands."""
+    from mistral_ocr.config import ConfigurationManager
+
+    config = ConfigurationManager()
+
+    if args.config == "show":
+        print("Current Configuration:")
+        print("=====================")
+
+        # Show API key status (don't reveal the actual key)
+        api_key = config.get_api_key()
+        if api_key:
+            if "api_key" in config._config:
+                print("API Key: Set in config file (***hidden***)")
+            else:
+                print("API Key: Set via environment variable")
+        else:
+            print("API Key: Not set")
+
+        # Show other configuration values
+        print(f"Default Model: {config.get_default_model()}")
+        print(f"Download Directory: {config.get_download_directory()}")
+        print(f"API Timeout: {config.get_timeout()} seconds")
+        print(f"Max Retries: {config.get_max_retries()}")
+        print(f"Config File: {config.config_file}")
+        print(f"Database Path: {config.database_path}")
+
+    elif args.config == "reset":
+        config.reset_to_defaults()
+        print("Configuration reset to defaults")
+
+
+def handle_config_set_api_key_command(args: argparse.Namespace) -> None:
+    """Handle API key configuration command."""
+    from mistral_ocr.config import ConfigurationManager
+    from mistral_ocr.exceptions import InvalidConfigurationError
+
+    config = ConfigurationManager()
+
+    try:
+        config.set_api_key(args.config_set_api_key)
+        print("API key saved to configuration file")
+    except InvalidConfigurationError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+def handle_config_set_model_command(args: argparse.Namespace) -> None:
+    """Handle default model configuration command."""
+    from mistral_ocr.config import ConfigurationManager
+    from mistral_ocr.exceptions import InvalidConfigurationError
+
+    config = ConfigurationManager()
+
+    try:
+        config.set_default_model(args.config_set_model)
+        print(f"Default model set to: {args.config_set_model}")
+    except InvalidConfigurationError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+def handle_config_set_download_dir_command(args: argparse.Namespace) -> None:
+    """Handle download directory configuration command."""
+    from mistral_ocr.config import ConfigurationManager
+    from mistral_ocr.exceptions import InvalidConfigurationError
+
+    config = ConfigurationManager()
+
+    try:
+        download_path = pathlib.Path(args.config_set_download_dir)
+        config.set_download_directory(download_path)
+        print(f"Download directory set to: {download_path}")
+    except InvalidConfigurationError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
 def main() -> None:
     """Main entry point for the Mistral OCR command-line interface.
-    
+
     Parses command-line arguments and routes to appropriate command handlers for:
     - Document submission and batch processing
     - Job status checking and management
     - Result retrieval and downloading
     - Document querying and listing
-    
+
     The CLI supports both individual file processing and batch operations,
     with automatic file validation, job tracking, and result management.
-    
+
     Environment Variables:
         MISTRAL_API_KEY: Required API key for Mistral service authentication
         XDG_DATA_HOME: Optional data directory override
         XDG_STATE_HOME: Optional state directory override
-        
+
     Raises:
         SystemExit: On error conditions or missing configuration
     """
@@ -244,9 +302,7 @@ def main() -> None:
         prog="mistral-ocr", description="Submit OCR batches to the Mistral API"
     )
 
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--submit", type=str, help="Submit a file or directory for OCR processing")
     parser.add_argument("--recursive", action="store_true", help="Process directories recursively")
     parser.add_argument("--document-name", type=str, help="Associate files with a document name")
@@ -271,6 +327,21 @@ def main() -> None:
     )
     parser.add_argument("--download-to", type=str, help="Specify download destination directory")
 
+    # Configuration management commands
+    parser.add_argument(
+        "--config",
+        type=str,
+        choices=["show", "reset"],
+        help="Configuration management: show current config or reset to defaults",
+    )
+    parser.add_argument(
+        "--config-set-api-key", type=str, help="Set the API key in configuration file"
+    )
+    parser.add_argument("--config-set-model", type=str, help="Set the default OCR model")
+    parser.add_argument(
+        "--config-set-download-dir", type=str, help="Set the default download directory"
+    )
+
     args = parser.parse_args()
 
     # Import here to avoid circular imports
@@ -280,7 +351,21 @@ def main() -> None:
     # Initialize settings
     settings = get_settings()
 
-    # Get API key
+    # Handle configuration commands first (these don't require API key)
+    if args.config:
+        handle_config_command(args, settings)
+        return
+    elif args.config_set_api_key:
+        handle_config_set_api_key_command(args)
+        return
+    elif args.config_set_model:
+        handle_config_set_model_command(args)
+        return
+    elif args.config_set_download_dir:
+        handle_config_set_download_dir_command(args)
+        return
+
+    # Get API key for non-config commands
     api_key = settings.get_api_key_optional()
     if not api_key:
         print("Error: No API key found. Set MISTRAL_API_KEY environment variable or use config.")
