@@ -66,7 +66,7 @@ class RetryManager:
         self.jitter = jitter
 
         # Default retryable exceptions (network/connection issues)
-        self.retryable_exceptions = retryable_exceptions or {
+        self.retryable_exceptions = retryable_exceptions if retryable_exceptions is not None else {
             APIConnectionError,
             ConnectionError,
             TimeoutError,
@@ -75,7 +75,7 @@ class RetryManager:
         }
 
         # Default non-retryable exceptions (permanent failures)
-        self.non_retryable_exceptions = non_retryable_exceptions or {
+        self.non_retryable_exceptions = non_retryable_exceptions if non_retryable_exceptions is not None else {
             NonRetryableError,
             ValueError,  # Invalid input parameters
             TypeError,  # Programming errors
@@ -106,8 +106,8 @@ class RetryManager:
             jitter_amount = base_delay * jitter_factor * (2 * random.random() - 1)
             base_delay += jitter_amount
 
-        # Cap at maximum delay
-        return min(base_delay, self.max_delay)
+        # Cap at maximum delay and ensure non-negative
+        return max(0.0, min(base_delay, self.max_delay))
 
     def is_retryable(self, exception: Exception) -> bool:
         """
@@ -153,9 +153,11 @@ class RetryManager:
         if isinstance(exception, RetryableError) and exception.retry_after:
             return exception.retry_after
 
-        # Check for HTTP response with Retry-After header
+        # Check for HTTP response with Retry-After header (case-insensitive)
         if hasattr(exception, "response") and hasattr(exception.response, "headers"):
-            retry_after = exception.response.headers.get("Retry-After")
+            headers = exception.response.headers
+            # Try both common case variations of the header
+            retry_after = headers.get("Retry-After") or headers.get("retry-after")
             if retry_after:
                 try:
                     return float(retry_after)

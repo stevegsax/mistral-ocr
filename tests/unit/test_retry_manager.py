@@ -426,13 +426,7 @@ class TestRetryManagerWithRealWorld:
                 raise TimeoutError("HTTP request timeout")
             return {"status": "success", "data": "response"}
 
-        with patch("time.sleep"):
-            result = simulate_http_request()
-            # First call would succeed without retry manager
-            assert result == {"status": "success", "data": "response"}
-
-        # Reset and test with retry manager
-        call_count = 0
+        # Test with retry manager
         with patch("time.sleep"):
             result = manager.execute_with_retry(simulate_http_request)
 
@@ -441,7 +435,7 @@ class TestRetryManagerWithRealWorld:
 
     def test_api_rate_limiting_scenario(self):
         """Test retry behavior for API rate limiting."""
-        manager = RetryManager(max_retries=2, base_delay=0.01)
+        manager = RetryManager(max_retries=2, base_delay=0.01, jitter=False)  # Disable jitter for exact timing
 
         class RateLimitError(Exception):
             def __init__(self, retry_after):

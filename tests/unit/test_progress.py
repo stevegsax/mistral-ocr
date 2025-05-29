@@ -206,6 +206,12 @@ class TestSubmissionProgressTracker:
 
     def test_submission_multiple_uploads(self, submission_tracker, mock_progress):
         """Test handling multiple batch uploads."""
+        # Mock the manager's create_progress method
+        submission_tracker.manager.create_progress.return_value.__enter__ = Mock(
+            return_value=mock_progress
+        )
+        submission_tracker.manager.create_progress.return_value.__exit__ = Mock(return_value=None)
+
         with submission_tracker.track_submission(200, 3) as context:
             # Multiple uploads for different batches
             for i in range(3):
@@ -216,8 +222,12 @@ class TestSubmissionProgressTracker:
 
             context.complete_job_creation()
 
-            # Should have multiple update calls
-            assert mock_progress.update.call_count >= 6  # 3 starts + 3 completions
+            # Should have multiple update calls: 3 job creation updates + 1 completion
+            assert mock_progress.update.call_count == 4  # 3 job updates + 1 completion
+            # Should also have add_task calls for uploads
+            assert mock_progress.add_task.call_count >= 3  # 3 upload tasks + initial tasks
+            # Should have remove_task calls for completed uploads
+            assert mock_progress.remove_task.call_count == 3  # 3 completed uploads
 
 
 class TestDownloadProgressTracker:
@@ -410,8 +420,8 @@ class TestLiveJobMonitor:
     def test_basic_monitor_setup(self, job_monitor):
         """Test basic job monitor setup."""
         # Mock the necessary dependencies for monitor_jobs
-        with patch("mistral_ocr.progress.get_settings") as mock_get_settings:
-            with patch("mistral_ocr.progress.MistralOCRClient"):
+        with patch("mistral_ocr.settings.get_settings") as mock_get_settings:
+            with patch("mistral_ocr.client.MistralOCRClient"):
                 mock_settings = MagicMock()
                 mock_settings.get_api_key_optional.return_value = "test-key"
                 mock_get_settings.return_value = mock_settings
@@ -505,15 +515,23 @@ class TestProgressIntegration:
 
         # Create multiple progress trackers and simulate work
         with patch("mistral_ocr.progress.Console"):
-            manager = ProgressManager(enabled=True)
+            with patch("mistral_ocr.progress.Progress") as mock_progress_class:
+                # Mock Progress class to return a mock with proper behavior
+                mock_progress = MagicMock()
+                mock_progress.__enter__ = Mock(return_value=mock_progress)
+                mock_progress.__exit__ = Mock(return_value=None)
+                mock_progress.add_task.return_value = "task_id"
+                mock_progress_class.return_value = mock_progress
 
-            # Create trackers
-            for _ in range(10):
-                tracker = manager.create_submission_progress()
-                with tracker.track_submission(100, 5) as context:
-                    context.complete_collection(100)
-                    context.update_encoding(50)
-                    context.complete_job_creation()
+                manager = ProgressManager(enabled=True)
+
+                # Create trackers
+                for _ in range(10):
+                    tracker = manager.create_submission_progress()
+                    with tracker.track_submission(100, 5) as context:
+                        context.complete_collection(100)
+                        context.update_encoding(50)
+                        context.complete_job_creation()
 
         duration = time.time() - start_time
 
@@ -529,17 +547,25 @@ class TestProgressIntegration:
 
         def track_progress(tracker_id):
             with patch("mistral_ocr.progress.Console"):
-                manager = ProgressManager(enabled=True)
-                tracker = manager.create_submission_progress()
+                with patch("mistral_ocr.progress.Progress") as mock_progress_class:
+                    # Mock Progress class to return a mock with proper behavior
+                    mock_progress = MagicMock()
+                    mock_progress.__enter__ = Mock(return_value=mock_progress)
+                    mock_progress.__exit__ = Mock(return_value=None)
+                    mock_progress.add_task.return_value = "task_id"
+                    mock_progress_class.return_value = mock_progress
 
-                try:
-                    with tracker.track_submission(50, 2) as context:
-                        context.complete_collection(50)
-                        context.update_encoding(25)
-                        context.complete_job_creation()
-                    results.put((tracker_id, "success"))
-                except Exception as e:
-                    results.put((tracker_id, f"error: {e}"))
+                    manager = ProgressManager(enabled=True)
+                    tracker = manager.create_submission_progress()
+
+                    try:
+                        with tracker.track_submission(50, 2) as context:
+                            context.complete_collection(50)
+                            context.update_encoding(25)
+                            context.complete_job_creation()
+                        results.put((tracker_id, "success"))
+                    except Exception as e:
+                        results.put((tracker_id, f"error: {e}"))
 
         # Start multiple threads
         threads = []

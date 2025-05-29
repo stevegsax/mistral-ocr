@@ -401,7 +401,9 @@ class LiveJobMonitor:
 
     def _all_jobs_complete(self, statuses: Dict[str, str]) -> bool:
         """Check if all jobs have completed."""
-        return all(status.upper() in FINAL_JOB_STATUSES for status in statuses.values())
+        # Create uppercase version of final statuses for consistent comparison
+        final_statuses_upper = {status.upper() for status in FINAL_JOB_STATUSES}
+        return all(status.upper() in final_statuses_upper for status in statuses.values())
 
     def _create_status_table(
         self,

@@ -523,13 +523,22 @@ class TestAuditIntegration:
         """Test AuditLogger with actual structlog integration."""
         # This test uses real structlog but with a test logger
         from io import StringIO
+        import logging
 
         import structlog
 
+        # Create a proper logger that writes to StringIO
         output = StringIO()
+        test_logger = logging.getLogger("test_audit")
+        test_logger.handlers.clear()
+        handler = logging.StreamHandler(output)
+        handler.setFormatter(logging.Formatter('%(message)s'))
+        test_logger.addHandler(handler)
+        test_logger.setLevel(logging.INFO)
+
         structlog.configure(
             processors=[structlog.processors.JSONRenderer()],
-            logger_factory=lambda name: output,  # Accept name parameter
+            logger_factory=lambda name: test_logger,
             cache_logger_on_first_use=False,
         )
 
