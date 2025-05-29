@@ -27,7 +27,7 @@ def validate_api_key(func: F) -> F:
     """
 
     @functools.wraps(func)
-    def wrapper(self, api_key: str, *args, **kwargs):
+    def wrapper(self, api_key: str, *args, **kwargs) -> Any:
         if not api_key or not isinstance(api_key, str):
             raise InvalidConfigurationError("API key must be a non-empty string")
 
@@ -50,7 +50,7 @@ def validate_job_id(func: F) -> F:
     """
 
     @functools.wraps(func)
-    def wrapper(self, job_id: str, *args, **kwargs):
+    def wrapper(self, job_id: str, *args, **kwargs) -> Any:
         if "invalid" in job_id.lower():
             raise InvalidJobIdError(f"Invalid job ID: {job_id}")
 
@@ -71,7 +71,7 @@ def validate_model_name(func: F) -> F:
     """
 
     @functools.wraps(func)
-    def wrapper(self, model: str, *args, **kwargs):
+    def wrapper(self, model: str, *args, **kwargs) -> Any:
         if not model or not isinstance(model, str):
             raise InvalidConfigurationError("Model name must be a non-empty string")
 
@@ -95,7 +95,7 @@ def validate_timeout_range(func: F) -> F:
     """
 
     @functools.wraps(func)
-    def wrapper(self, timeout: int, *args, **kwargs):
+    def wrapper(self, timeout: int, *args, **kwargs) -> Any:
         if not isinstance(timeout, int) or timeout < 1 or timeout > MAX_API_TIMEOUT_SECONDS:
             raise InvalidConfigurationError(
                 f"Timeout must be an integer between 1 and {MAX_API_TIMEOUT_SECONDS} seconds"
@@ -118,7 +118,7 @@ def validate_retry_count(func: F) -> F:
     """
 
     @functools.wraps(func)
-    def wrapper(self, retries: int, *args, **kwargs):
+    def wrapper(self, retries: int, *args, **kwargs) -> Any:
         if not isinstance(retries, int) or retries < 0 or retries > MAX_RETRIES_LIMIT:
             raise InvalidConfigurationError(
                 f"Max retries must be an integer between 0 and {MAX_RETRIES_LIMIT}"
@@ -140,7 +140,7 @@ def validate_file_exists(func: F) -> F:
     """
 
     @functools.wraps(func)
-    def wrapper(self, file_path: pathlib.Path, *args, **kwargs):
+    def wrapper(self, file_path: pathlib.Path, *args, **kwargs) -> Any:
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
@@ -161,7 +161,7 @@ def validate_directory_path(func: F) -> F:
     """
 
     @functools.wraps(func)
-    def wrapper(self, path: pathlib.Path, *args, **kwargs):
+    def wrapper(self, path: pathlib.Path, *args, **kwargs) -> Any:
         if not isinstance(path, pathlib.Path):
             raise InvalidConfigurationError("Directory path must be a Path object")
 
@@ -178,15 +178,15 @@ def validate_directory_path(func: F) -> F:
 def require_database_connection(func: F) -> F:
     """Decorator to ensure database connection exists.
 
-    Validates that self.connection is not None before executing the function.
+    Validates that self.session is not None before executing the function.
 
     Raises:
         DatabaseConnectionError: If database is not connected
     """
 
     @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        if not hasattr(self, "connection") or not self.connection:
+    def wrapper(self, *args, **kwargs) -> Any:
+        if not hasattr(self, "session") or not self.session:
             raise DatabaseConnectionError("Database not connected")
 
         return func(self, *args, **kwargs)
@@ -209,7 +209,7 @@ def validate_supported_file_type(supported_extensions: set) -> Callable[[F], F]:
 
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(self, file_path: pathlib.Path, *args, **kwargs):
+        def wrapper(self, file_path: pathlib.Path, *args, **kwargs) -> Any:
             if file_path.suffix.lower() not in supported_extensions:
                 raise UnsupportedFileTypeError(f"Unsupported file type: {file_path.suffix}")
 

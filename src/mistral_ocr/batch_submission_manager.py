@@ -1,5 +1,6 @@
 """Batch submission management for Mistral OCR."""
 
+import dataclasses
 import json
 import os
 import pathlib
@@ -488,16 +489,18 @@ class BatchSubmissionManager:
                     self.logger.debug(f"Encoding file {i + 1}/{len(file_paths)}: {file_path.name}")
                     data_url = self._encode_file_to_data_url(file_path)
                     if data_url:
-                        document_content: DocumentContent = {
-                            "type": "image_url",
-                            "image_url": data_url,
-                        }
-                        body: BatchFileBody = {
-                            "document": document_content,
-                            "include_image_base64": True,
-                        }
-                        entry: BatchFileEntry = {"custom_id": file_path.name, "body": body}
-                        f.write(json.dumps(entry) + "\n")
+                        document_content = DocumentContent(
+                            type="image_url",
+                            image_url=data_url,
+                        )
+                        body = BatchFileBody(
+                            document=document_content,
+                            include_image_base64=True,
+                        )
+                        entry = BatchFileEntry(custom_id=file_path.name, body=body)
+                        # Convert pydantic dataclass to dict for JSON serialization
+                        entry_dict = dataclasses.asdict(entry)
+                        f.write(json.dumps(entry_dict) + "\n")
                         successful_entries += 1
                     else:
                         self.logger.warning(f"Failed to encode file: {file_path}")

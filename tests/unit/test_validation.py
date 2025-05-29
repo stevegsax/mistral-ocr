@@ -1,7 +1,6 @@
 """Unit tests for validation decorators."""
 
 import pathlib
-import sqlite3
 
 import pytest
 
@@ -388,40 +387,41 @@ class TestValidateDirectoryPath:
 class TestRequireDatabaseConnection:
     """Test database connection requirement decorator."""
 
-    def test_with_valid_connection_passes(self):
-        """Test that method passes with valid database connection."""
+    def test_with_valid_session_passes(self):
+        """Test that method passes with valid database session."""
 
         @require_database_connection
         def dummy_method(self) -> str:
             return "database operation successful"
 
-        # Create mock object with connection
-        mock_obj = type("MockDB", (), {"connection": sqlite3.connect(":memory:")})()
+        # Create mock object with session
+        mock_session = type("MockSession", (), {})()
+        mock_obj = type("MockDB", (), {"session": mock_session})()
 
         result = dummy_method(mock_obj)
         assert result == "database operation successful"
 
-    def test_without_connection_raises_error(self):
-        """Test that method raises error without database connection."""
+    def test_without_session_raises_error(self):
+        """Test that method raises error without database session."""
 
         @require_database_connection
         def dummy_method(self) -> str:
             return "database operation successful"
 
-        # Create mock object without connection
-        mock_obj = type("MockDB", (), {"connection": None})()
+        # Create mock object without session
+        mock_obj = type("MockDB", (), {"session": None})()
 
         with pytest.raises(DatabaseConnectionError, match="Database not connected"):
             dummy_method(mock_obj)
 
-    def test_without_connection_attribute_raises_error(self):
-        """Test that method raises error when connection attribute doesn't exist."""
+    def test_without_session_attribute_raises_error(self):
+        """Test that method raises error when session attribute doesn't exist."""
 
         @require_database_connection
         def dummy_method(self) -> str:
             return "database operation successful"
 
-        # Create mock object without connection attribute
+        # Create mock object without session attribute
         mock_obj = type("MockDB", (), {})()
 
         with pytest.raises(DatabaseConnectionError, match="Database not connected"):

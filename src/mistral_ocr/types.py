@@ -84,7 +84,7 @@ class PageInfo:
 
 
 @dataclass(config=ConfigDict(extra="allow"))
-class APIJobResponse:
+class APIJobResponse(DictAccessMixin):
     """API response structure for job details."""
 
     id: str

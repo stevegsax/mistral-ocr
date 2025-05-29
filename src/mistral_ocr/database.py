@@ -2,10 +2,12 @@
 
 import json
 import pathlib
-import sqlite3
 from typing import Any, List, Optional, Tuple
 
-from .constants import PRAGMA_FOREIGN_KEYS
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.orm import Session, sessionmaker
+
+from .db_models import Base, Document, Job, Page
 from .exceptions import DatabaseConnectionError
 from .types import APIJobResponse, JobDetails, JobInfo
 from .validation import require_database_connection
@@ -21,74 +23,29 @@ class Database:
             db_path: Path to the SQLite database file
         """
         self.db_path = db_path
-        self.connection: Optional[sqlite3.Connection] = None
+        self.engine = create_engine(f"sqlite:///{db_path}")
+        self.SessionLocal = sessionmaker(bind=self.engine)
+        self.session: Optional[Session] = None
 
     def connect(self) -> None:
         """Connect to the database."""
-        self.connection = sqlite3.connect(str(self.db_path))
-        # Enable foreign key constraints
-        self.connection.execute(PRAGMA_FOREIGN_KEYS)
+        self.session = self.SessionLocal()
+        # Enable foreign key constraints in SQLite
+        self.session.execute(text("PRAGMA foreign_keys=ON"))
 
     @require_database_connection
     def initialize_schema(self) -> None:
         """Initialize the database schema."""
-        # Database connection check is now handled by the decorator
-
-        # Create documents table
-        self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS documents (
-                uuid TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                downloaded BOOLEAN DEFAULT FALSE
-            )
-        """)
-
-        # Create jobs table
-        self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS jobs (
-                job_id TEXT PRIMARY KEY,
-                document_uuid TEXT NOT NULL,
-                status TEXT NOT NULL,
-                file_count INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_api_refresh TIMESTAMP,
-                api_response_json TEXT,
-                api_created_at TEXT,
-                api_completed_at TEXT,
-                total_requests INTEGER,
-                input_files_json TEXT,
-                output_file TEXT,
-                errors_json TEXT,
-                metadata_json TEXT,
-                FOREIGN KEY (document_uuid) REFERENCES documents (uuid)
-            )
-        """)
-
-        # Create pages table
-        self.connection.execute("""
-            CREATE TABLE IF NOT EXISTS pages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                file_path TEXT NOT NULL,
-                document_uuid TEXT NOT NULL,
-                file_id TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (document_uuid) REFERENCES documents (uuid)
-            )
-        """)
-
-        self.connection.commit()
-
+        # Create all tables using SQLAlchemy
+        Base.metadata.create_all(self.engine)
+        
         # Handle schema migrations for existing databases
         self._migrate_schema()
 
     def _migrate_schema(self) -> None:
         """Handle database schema migrations for existing databases."""
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
-
-        cursor = self.connection.cursor()
 
         # List of new columns to add with their SQL types
         new_columns = [
@@ -105,30 +62,23 @@ class Database:
 
         for column_name, column_type in new_columns:
             try:
-                cursor.execute(f"SELECT {column_name} FROM jobs LIMIT 1")
-            except sqlite3.OperationalError:
+                self.session.execute(text(f"SELECT {column_name} FROM jobs LIMIT 1"))
+            except Exception:
                 # Column doesn't exist, add it
-                cursor.execute(f"ALTER TABLE jobs ADD COLUMN {column_name} {column_type}")
-
-        # Make file_count nullable for existing databases
-        try:
-            cursor.execute("SELECT sql FROM sqlite_master WHERE name='jobs' AND type='table'")
-            result = cursor.fetchone()
-            if result and "file_count INTEGER NOT NULL" in result[0]:
-                # Need to recreate table to make file_count nullable
-                # This is complex in SQLite, so we'll handle it in future migration if needed
-                pass
-        except sqlite3.OperationalError:
-            pass
+                self.session.execute(
+                    text(f"ALTER TABLE jobs ADD COLUMN {column_name} {column_type}")
+                )
 
         # Add downloaded column to documents table if it doesn't exist
         try:
-            cursor.execute("SELECT downloaded FROM documents LIMIT 1")
-        except sqlite3.OperationalError:
+            self.session.execute(text("SELECT downloaded FROM documents LIMIT 1"))
+        except Exception:
             # Column doesn't exist, add it
-            cursor.execute("ALTER TABLE documents ADD COLUMN downloaded BOOLEAN DEFAULT FALSE")
+            self.session.execute(
+                text("ALTER TABLE documents ADD COLUMN downloaded BOOLEAN DEFAULT FALSE")
+            )
 
-        self.connection.commit()
+        self.session.commit()
 
     def execute(self, query: str, params: Optional[Tuple] = None) -> Any:
         """Execute a SQL query and return the result.
@@ -144,26 +94,28 @@ class Database:
             DatabaseConnectionError: If database connection is not established
             DatabaseOperationError: If SQL execution fails
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
         if params:
-            cursor.execute(query, params)
+            result = self.session.execute(text(query), params)
         else:
-            cursor.execute(query)
+            result = self.session.execute(text(query))
 
         # Commit if it's a modification query
         if query.strip().upper().startswith(("INSERT", "UPDATE", "DELETE", "CREATE")):
-            self.connection.commit()
+            self.session.commit()
+            return None
 
-        result = cursor.fetchone()
-
-        # For "SELECT 1", return the single value
-        if result and len(result) == 1:
-            return result[0]
-
-        return result
+        # Only try to fetch results for SELECT queries
+        if query.strip().upper().startswith("SELECT"):
+            row = result.fetchone()
+            # For "SELECT 1", return the single value
+            if row and len(row) == 1:
+                return row[0]
+            return row
+        
+        return None
 
     def store_document(self, uuid: str, name: str) -> None:
         """Store document metadata.
@@ -172,26 +124,21 @@ class Database:
             uuid: Document UUID
             name: Document name
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        # Use INSERT OR IGNORE to preserve existing downloaded status
-        cursor.execute(
-            """
-            INSERT OR IGNORE INTO documents (uuid, name, downloaded) 
-            VALUES (?, ?, FALSE)
-        """,
-            (uuid, name),
-        )
-        # Update name if document already exists (but preserve downloaded status)
-        cursor.execute(
-            """
-            UPDATE documents SET name = ? WHERE uuid = ?
-        """,
-            (name, uuid),
-        )
-        self.connection.commit()
+        # Check if document already exists
+        existing_doc = self.session.get(Document, uuid)
+        
+        if existing_doc:
+            # Update name if document already exists (but preserve downloaded status)
+            existing_doc.name = name
+        else:
+            # Create new document
+            new_doc = Document(uuid=uuid, name=name, downloaded=False)
+            self.session.add(new_doc)
+        
+        self.session.commit()
 
     @require_database_connection
     def mark_document_downloaded(self, document_uuid: str) -> None:
@@ -200,14 +147,10 @@ class Database:
         Args:
             document_uuid: Document UUID to mark as downloaded
         """
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            UPDATE documents SET downloaded = TRUE WHERE uuid = ?
-        """,
-            (document_uuid,),
-        )
-        self.connection.commit()
+        document = self.session.get(Document, document_uuid)
+        if document:
+            document.downloaded = True
+            self.session.commit()
 
     def store_job(
         self, job_id: str, document_uuid: str, status: str, file_count: Optional[int] = None
@@ -220,18 +163,27 @@ class Database:
             status: Job status
             file_count: Number of files in the job
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO jobs (job_id, document_uuid, status, file_count) 
-            VALUES (?, ?, ?, ?)
-        """,
-            (job_id, document_uuid, status, file_count),
-        )
-        self.connection.commit()
+        # Check if job already exists
+        existing_job = self.session.get(Job, job_id)
+        
+        if existing_job:
+            # Update existing job
+            existing_job.status = status
+            existing_job.file_count = file_count
+        else:
+            # Create new job
+            new_job = Job(
+                job_id=job_id,
+                document_uuid=document_uuid, 
+                status=status,
+                file_count=file_count
+            )
+            self.session.add(new_job)
+        
+        self.session.commit()
 
     def store_page(self, file_path: str, document_uuid: str, file_id: str) -> None:
         """Store page metadata.
@@ -241,18 +193,16 @@ class Database:
             document_uuid: Associated document UUID
             file_id: Uploaded file ID
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            INSERT INTO pages (file_path, document_uuid, file_id) 
-            VALUES (?, ?, ?)
-        """,
-            (file_path, document_uuid, file_id),
+        new_page = Page(
+            file_path=file_path,
+            document_uuid=document_uuid,
+            file_id=file_id
         )
-        self.connection.commit()
+        self.session.add(new_page)
+        self.session.commit()
 
     def update_job_status(self, job_id: str, status: str) -> None:
         """Update job status.
@@ -261,19 +211,18 @@ class Database:
             job_id: Job ID
             status: New status
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            UPDATE jobs 
-            SET status = ?, updated_at = CURRENT_TIMESTAMP 
-            WHERE job_id = ?
-        """,
-            (status, job_id),
-        )
-        self.connection.commit()
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
+            
+        job = self.session.get(Job, job_id)
+        if job:
+            job.status = status
+            from datetime import datetime
+            job.updated_at = datetime.now()
+            self.session.commit()
 
     def update_job_api_refresh(self, job_id: str, status: str, api_response_json: str) -> None:
         """Update job with API refresh information.
@@ -283,20 +232,20 @@ class Database:
             status: New status from API
             api_response_json: Full JSON response from API
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            UPDATE jobs 
-            SET status = ?, updated_at = CURRENT_TIMESTAMP, 
-                last_api_refresh = CURRENT_TIMESTAMP, api_response_json = ?
-            WHERE job_id = ?
-        """,
-            (status, api_response_json, job_id),
-        )
-        self.connection.commit()
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
+            
+        job = self.session.get(Job, job_id)
+        if job:
+            job.status = status
+            from datetime import datetime
+            job.updated_at = datetime.now()
+            job.last_api_refresh = datetime.now()
+            job.api_response_json = api_response_json
+            self.session.commit()
 
     def store_job_full_api_data(
         self, job_id: str, document_uuid: str, api_data: APIJobResponse
@@ -308,7 +257,7 @@ class Database:
             document_uuid: Associated document UUID
             api_data: Complete API response data
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
         # Serialize lists and dicts to JSON
@@ -319,32 +268,45 @@ class Database:
         metadata_json = json.dumps(api_data.get("metadata")) if api_data.get("metadata") else None
         api_response_json = json.dumps(api_data, default=str)
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO jobs (
-                job_id, document_uuid, status, file_count,
-                api_created_at, api_completed_at, total_requests,
-                input_files_json, output_file, errors_json, metadata_json,
-                last_api_refresh, api_response_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-        """,
-            (
-                job_id,
-                document_uuid,
-                api_data.get("status"),
-                api_data.get("total_requests"),
-                api_data.get("created_at"),
-                api_data.get("completed_at"),
-                api_data.get("total_requests"),
-                input_files_json,
-                api_data.get("output_file"),
-                errors_json,
-                metadata_json,
-                api_response_json,
-            ),
-        )
-        self.connection.commit()
+        # Check if job already exists
+        existing_job = self.session.get(Job, job_id)
+        
+        if existing_job:
+            # Update existing job
+            existing_job.document_uuid = document_uuid
+            existing_job.status = api_data.get("status")
+            existing_job.file_count = api_data.get("total_requests")
+            existing_job.api_created_at = api_data.get("created_at")
+            existing_job.api_completed_at = api_data.get("completed_at")
+            existing_job.total_requests = api_data.get("total_requests")
+            existing_job.input_files_json = input_files_json
+            existing_job.output_file = api_data.get("output_file")
+            existing_job.errors_json = errors_json
+            existing_job.metadata_json = metadata_json
+            existing_job.api_response_json = api_response_json
+            from datetime import datetime
+            existing_job.last_api_refresh = datetime.now()
+        else:
+            # Create new job
+            new_job = Job(
+                job_id=job_id,
+                document_uuid=document_uuid,
+                status=api_data.get("status"),
+                file_count=api_data.get("total_requests"),
+                api_created_at=api_data.get("created_at"),
+                api_completed_at=api_data.get("completed_at"),
+                total_requests=api_data.get("total_requests"),
+                input_files_json=input_files_json,
+                output_file=api_data.get("output_file"),
+                errors_json=errors_json,
+                metadata_json=metadata_json,
+                api_response_json=api_response_json
+            )
+            from datetime import datetime
+            new_job.last_api_refresh = datetime.now()
+            self.session.add(new_job)
+        
+        self.session.commit()
 
     def update_job_full_api_data(self, job_id: str, api_data: APIJobResponse) -> None:
         """Update existing job with complete API information.
@@ -353,7 +315,7 @@ class Database:
             job_id: Job ID
             api_data: Complete API response data
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
         # Serialize lists and dicts to JSON
@@ -364,30 +326,24 @@ class Database:
         metadata_json = json.dumps(api_data.get("metadata")) if api_data.get("metadata") else None
         api_response_json = json.dumps(api_data, default=str)
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            UPDATE jobs 
-            SET status = ?, updated_at = CURRENT_TIMESTAMP, 
-                api_created_at = ?, api_completed_at = ?, total_requests = ?,
-                input_files_json = ?, output_file = ?, errors_json = ?, metadata_json = ?,
-                last_api_refresh = CURRENT_TIMESTAMP, api_response_json = ?
-            WHERE job_id = ?
-        """,
-            (
-                api_data.get("status"),
-                api_data.get("created_at"),
-                api_data.get("completed_at"),
-                api_data.get("total_requests"),
-                input_files_json,
-                api_data.get("output_file"),
-                errors_json,
-                metadata_json,
-                api_response_json,
-                job_id,
-            ),
-        )
-        self.connection.commit()
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
+            
+        job = self.session.get(Job, job_id)
+        if job:
+            job.status = api_data.get("status")
+            from datetime import datetime
+            job.updated_at = datetime.now()
+            job.api_created_at = api_data.get("created_at")
+            job.api_completed_at = api_data.get("completed_at")
+            job.total_requests = api_data.get("total_requests")
+            job.input_files_json = input_files_json
+            job.output_file = api_data.get("output_file")
+            job.errors_json = errors_json
+            job.metadata_json = metadata_json
+            job.last_api_refresh = datetime.now()
+            job.api_response_json = api_response_json
+            self.session.commit()
 
     def get_recent_document_by_name(self, name: str) -> Optional[str]:
         """Get the most recent document UUID by name.
@@ -398,22 +354,17 @@ class Database:
         Returns:
             Document UUID if found, None otherwise
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            SELECT uuid FROM documents 
-            WHERE name = ? 
-            ORDER BY created_at DESC 
-            LIMIT 1
-        """,
-            (name,),
+        stmt = (
+            select(Document.uuid)
+            .where(Document.name == name)
+            .order_by(Document.created_at.desc())
+            .limit(1)
         )
-
-        result = cursor.fetchone()
-        return result[0] if result else None
+        result = self.session.execute(stmt).scalar_one_or_none()
+        return result
 
     def get_jobs_by_document_name(self, name: str) -> List[str]:
         """Get all job IDs for a document name.
@@ -424,21 +375,16 @@ class Database:
         Returns:
             List of job IDs
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            SELECT j.job_id 
-            FROM jobs j 
-            JOIN documents d ON j.document_uuid = d.uuid 
-            WHERE d.name = ?
-        """,
-            (name,),
+        stmt = (
+            select(Job.job_id)
+            .join(Document)
+            .where(Document.name == name)
         )
-
-        return [row[0] for row in cursor.fetchall()]
+        result = self.session.execute(stmt)
+        return [row[0] for row in result.fetchall()]
 
     def get_document_by_job(self, job_id: str) -> Optional[Tuple[str, str]]:
         """Get document info by job ID.
@@ -449,21 +395,15 @@ class Database:
         Returns:
             Tuple of (uuid, name) if found, None otherwise
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            SELECT d.uuid, d.name 
-            FROM documents d 
-            JOIN jobs j ON d.uuid = j.document_uuid 
-            WHERE j.job_id = ?
-        """,
-            (job_id,),
+        stmt = (
+            select(Document.uuid, Document.name)
+            .join(Job)
+            .where(Job.job_id == job_id)
         )
-
-        result = cursor.fetchone()
+        result = self.session.execute(stmt).first()
         return (result[0], result[1]) if result else None
 
     def get_jobs_by_document_identifier(self, identifier: str) -> List[str]:
@@ -475,36 +415,25 @@ class Database:
         Returns:
             List of job IDs
         """
-        if not self.connection:
+        if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-
         # First try to find by UUID
-        cursor.execute(
-            """
-            SELECT j.job_id 
-            FROM jobs j 
-            WHERE j.document_uuid = ?
-        """,
-            (identifier,),
-        )
-        results = cursor.fetchall()
+        stmt = select(Job.job_id).where(Job.document_uuid == identifier)
+        result = self.session.execute(stmt)
+        results = [row[0] for row in result.fetchall()]
 
         # If no results by UUID, try by name
         if not results:
-            cursor.execute(
-                """
-                SELECT j.job_id 
-                FROM jobs j 
-                JOIN documents d ON j.document_uuid = d.uuid 
-                WHERE d.name = ?
-            """,
-                (identifier,),
+            stmt = (
+                select(Job.job_id)
+                .join(Document)
+                .where(Document.name == identifier)
             )
-            results = cursor.fetchall()
+            result = self.session.execute(stmt)
+            results = [row[0] for row in result.fetchall()]
 
-        return [row[0] for row in results]
+        return results
 
     @require_database_connection
     def get_all_jobs(self) -> List[JobInfo]:
@@ -514,18 +443,29 @@ class Database:
             List of dictionaries containing job information
         """
         # Database connection check is now handled by the decorator
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute("""
-            SELECT j.job_id, j.status, j.created_at, j.api_created_at, j.api_completed_at,
-                   j.total_requests, j.input_files_json, j.output_file, j.errors_json, j.metadata_json,
-                   j.last_api_refresh
-            FROM jobs j
-            ORDER BY j.created_at DESC
-        """)
+        stmt = (
+            select(
+                Job.job_id,
+                Job.status,
+                Job.created_at,
+                Job.api_created_at,
+                Job.api_completed_at,
+                Job.total_requests,
+                Job.input_files_json,
+                Job.output_file,
+                Job.errors_json,
+                Job.metadata_json,
+                Job.last_api_refresh,
+            )
+            .order_by(Job.created_at.desc())
+        )
+        result = self.session.execute(stmt)
 
         jobs: List[JobInfo] = []
-        for row in cursor.fetchall():
+        for row in result.fetchall():
             # Parse JSON fields safely
             try:
                 input_files = json.loads(row[6]) if row[6] else None
@@ -570,22 +510,32 @@ class Database:
             Dictionary containing detailed job information, or None if not found
         """
         # Database connection check is now handled by the decorator
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
 
-        cursor = self.connection.cursor()
-        cursor.execute(
-            """
-            SELECT j.job_id, j.status, j.file_count, j.created_at, j.updated_at,
-                   d.name as document_name, j.last_api_refresh, j.api_response_json,
-                   j.api_created_at, j.api_completed_at, j.total_requests,
-                   j.input_files_json, j.output_file, j.errors_json, j.metadata_json
-            FROM jobs j
-            JOIN documents d ON j.document_uuid = d.uuid
-            WHERE j.job_id = ?
-        """,
-            (job_id,),
+        stmt = (
+            select(
+                Job.job_id,
+                Job.status,
+                Job.file_count,
+                Job.created_at,
+                Job.updated_at,
+                Document.name.label("document_name"),
+                Job.last_api_refresh,
+                Job.api_response_json,
+                Job.api_created_at,
+                Job.api_completed_at,
+                Job.total_requests,
+                Job.input_files_json,
+                Job.output_file,
+                Job.errors_json,
+                Job.metadata_json,
+            )
+            .join(Document)
+            .where(Job.job_id == job_id)
         )
-
-        result = cursor.fetchone()
+        result = self.session.execute(stmt).first()
+        
         if not result:
             return None
 
@@ -629,6 +579,6 @@ class Database:
 
     def close(self) -> None:
         """Close the database connection."""
-        if self.connection:
-            self.connection.close()
-            self.connection = None
+        if self.session:
+            self.session.close()
+            self.session = None
