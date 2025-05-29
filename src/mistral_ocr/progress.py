@@ -40,15 +40,15 @@ class ProgressManager:
     for long-running operations like file processing and API calls.
     """
 
-    def __init__(self, console: Optional[Console] = None, enabled: bool = True) -> None:
+    def __init__(self, console: Optional[Console] = None, enabled: bool = False) -> None:
         """
         Initialize the progress manager.
 
         Args:
             console: Rich console instance, creates new one if None
-            enabled: Whether progress displays are enabled
+            enabled: Whether progress displays are enabled (default False for file-only logging)
         """
-        self.console = console or Console()
+        self.console = console or Console(file=None) if enabled else None
         self.enabled = enabled
         self._active_progress: Optional[Progress] = None
         self._active_live: Optional[Live] = None

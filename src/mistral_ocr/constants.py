@@ -163,7 +163,7 @@ DEFAULT_DOWNLOAD_DIR_NAME = "downloads"
 """Default subdirectory name for downloaded results."""
 
 # Progress and UI Configuration
-DEFAULT_PROGRESS_ENABLED = True
+DEFAULT_PROGRESS_ENABLED = False
 """Default setting for progress bar display."""
 
 DEFAULT_PROGRESS_REFRESH_RATE = 0.5

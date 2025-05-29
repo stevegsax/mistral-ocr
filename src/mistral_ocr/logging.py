@@ -37,7 +37,7 @@ def setup_logging(
     level: str = "INFO",
     max_bytes: int = 50 * 1024 * 1024,  # 50MB
     backup_count: int = 5,
-    enable_console: bool = True,
+    enable_console: bool = False,  # Changed default to False
 ) -> pathlib.Path:
     """Set up enhanced logging with rotation and audit capabilities.
 
@@ -71,8 +71,8 @@ def setup_logging(
     performance_log_file = log_dir / "performance.log"
     performance_log_file.touch()
 
-    # Configure different processors for different output types
-    json_processors = [
+    # Configure processors for file-only output
+    file_processors = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
@@ -80,16 +80,8 @@ def setup_logging(
         structlog.processors.JSONRenderer(),
     ]
 
-    console_processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        AuditProcessor(),
-        structlog.dev.ConsoleRenderer(colors=True),
-    ]
-
-    # Configure structlog
-    processors = console_processors if (enable_console and sys.stderr.isatty()) else json_processors
+    # Always use file-only processors (no console output)
+    processors = file_processors
 
     structlog.configure(
         processors=processors,
@@ -98,10 +90,10 @@ def setup_logging(
         cache_logger_on_first_use=True,
     )
 
-    # Set up Python logging to work with structlog
+    # Set up Python logging to work with structlog (file-only)
     logging.basicConfig(
         level=getattr(logging, level.upper()),
-        handlers=[file_handler] + ([logging.StreamHandler()] if enable_console else []),
+        handlers=[file_handler],  # Only file handler, no console output
         format="%(message)s",
     )
 

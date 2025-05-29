@@ -86,7 +86,7 @@ class MistralOCRClient:
         from mistral_ocr.logging import get_logger, setup_logging
 
         log_directory = self.settings.state_directory
-        self.log_file = setup_logging(log_directory)
+        self.log_file = setup_logging(log_directory, enable_console=False)
         self.logger = get_logger(__name__)
         self.audit_logger = get_audit_logger("client")
         self.security_logger = get_security_logger("client")
