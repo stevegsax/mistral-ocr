@@ -11,6 +11,7 @@ A Python CLI tool for submitting documents to the Mistral OCR service, managing 
 - **Document Management**: Associate files with named documents using UUIDs
 - **Job Tracking**: Check status, cancel jobs, and query by document name
 - **Result Retrieval**: Download OCR results in text and markdown formats
+- **Configuration Management**: CLI commands for API key, model, and directory settings
 - **XDG Compliance**: Follows XDG Base Directory specification for config and data
 
 ## Installation
@@ -30,13 +31,40 @@ uv add <package>
 
 ## Configuration
 
-Set your Mistral API key as an environment variable:
+### API Key Setup
 
+Set your Mistral API key using one of these methods:
+
+**Option 1: Environment Variable**
 ```bash
 export MISTRAL_API_KEY="your-api-key-here"
 ```
 
-Alternatively, you can store it in the configuration file using the CLI (stored in `~/.config/mistral-ocr/config.json`).
+**Option 2: Configuration File**
+```bash
+# Set API key in configuration file (~/.config/mistral-ocr/config.json)
+uv run python -m mistral_ocr --config-set-api-key "your-api-key-here"
+```
+
+### Configuration Management
+
+Use the built-in configuration commands to manage your settings:
+
+```bash
+# Show current configuration (API key is hidden for security)
+uv run python -m mistral_ocr --config show
+
+# Set default OCR model
+uv run python -m mistral_ocr --config-set-model "pixtral-12b-2412"
+
+# Set default download directory
+uv run python -m mistral_ocr --config-set-download-dir "/path/to/downloads"
+
+# Reset all settings to defaults (preserves API key)
+uv run python -m mistral_ocr --config reset
+```
+
+**Configuration File Location**: `~/.config/mistral-ocr/config.json` (follows XDG Base Directory specification)
 
 ## Usage Examples
 
@@ -224,6 +252,12 @@ Display help and available options:
 ```bash
 uv run python -m mistral_ocr --help
 ```
+
+**Available Commands:**
+- File submission: `--submit`, `--recursive`, `--document-name`, `--document-uuid`, `--model`
+- Job management: `--check-job`, `--list-jobs`, `--job-status`, `--query-document`, `--cancel-job`
+- Result retrieval: `--get-results`, `--download-results`, `--download-document`, `--download-to`
+- Configuration: `--config`, `--config-set-api-key`, `--config-set-model`, `--config-set-download-dir`
 
 ## Implementation Notes
 

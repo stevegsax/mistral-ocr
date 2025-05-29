@@ -21,6 +21,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run specific test: `pytest tests/test_mistral_ocr.py::test_name`
 - Tests use xfail markers for unimplemented features
 
+### Configuration Commands
+- Show configuration: `uv run python -m mistral_ocr --config show`
+- Set API key: `uv run python -m mistral_ocr --config-set-api-key "key"`
+- Set default model: `uv run python -m mistral_ocr --config-set-model "model-name"`
+- Set download directory: `uv run python -m mistral_ocr --config-set-download-dir "/path"`
+- Reset to defaults: `uv run python -m mistral_ocr --config reset`
+
 ## Architecture
 
 This is a Python CLI tool for submitting OCR batches to the Mistral API. The architecture follows a structured 7-phase development process defined in `PROCESS.md` that must be followed in order:
@@ -46,6 +53,7 @@ This is a Python CLI tool for submitting OCR batches to the Mistral API. The arc
 - Document naming and UUID-based association
 - Job status tracking and cancellation
 - Result retrieval and automatic download
+- Configuration management via CLI commands
 - Support for PNG, JPEG, and PDF files
 
 ## Development Rules
