@@ -189,3 +189,6 @@ cython_debug/
 
 # Ignore database files
 *.db
+
+# Ignore continuation context files
+CONTINUATION_CONTEXT.md
