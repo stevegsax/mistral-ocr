@@ -201,7 +201,7 @@ class TestConcurrentJobProcessor:
             "job3": "running",
         }.get(job_id, "unknown")
 
-        from mistral_ocr.types import JobInfo
+        from mistral_ocr.data_types import JobInfo
 
         jobs = [
             JobInfo(id="job1", status="running", submitted="2024-01-01T10:00:00Z"),
@@ -235,7 +235,7 @@ class TestConcurrentJobProcessor:
 
         mock_job_manager.check_job_status.side_effect = mock_check_status
 
-        from mistral_ocr.types import JobInfo
+        from mistral_ocr.data_types import JobInfo
 
         jobs = [
             JobInfo(
@@ -270,7 +270,7 @@ class TestConcurrentJobProcessor:
 
         mock_job_manager.check_job_status.side_effect = mock_check_status
 
-        from mistral_ocr.types import JobInfo
+        from mistral_ocr.data_types import JobInfo
 
         jobs = [
             JobInfo(id="job1", status="running", submitted="2024-01-01T10:00:00Z"),
@@ -519,7 +519,7 @@ class TestIntegrationScenarios:
         processor = ConcurrentJobProcessor(max_concurrent=3)
         job_manager = MockJobManager()
 
-        from mistral_ocr.types import JobInfo
+        from mistral_ocr.data_types import JobInfo
 
         jobs = [
             JobInfo(id="job_complete_1", status="running", submitted="2024-01-01T10:00:00Z"),

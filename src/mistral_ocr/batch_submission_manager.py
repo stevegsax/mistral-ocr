@@ -21,7 +21,7 @@ from .document_manager import DocumentManager
 from .exceptions import JobSubmissionError, RetryableError
 from .files import FileCollector
 from .progress import ProgressManager
-from .types import BatchFileBody, BatchFileEntry, DocumentContent
+from .data_types import BatchFileBody, BatchFileEntry, DocumentContent
 from .utils.file_operations import FileEncodingUtils, TempFileUtils
 from .utils.retry_manager import with_retry
 

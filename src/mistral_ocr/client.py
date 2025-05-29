@@ -15,7 +15,7 @@ from .parsing import OCRResultParser
 from .progress import ProgressManager
 from .result_manager import ResultManager
 from .settings import Settings, get_settings
-from .types import JobDetails, JobInfo
+from .data_types import JobDetails, JobInfo
 
 
 class MistralOCRClient:

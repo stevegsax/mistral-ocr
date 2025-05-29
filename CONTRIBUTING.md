@@ -112,7 +112,7 @@ src/mistral_ocr/
 ├── settings.py              # Unified settings facade
 ├── validation.py            # Input validation decorators
 ├── exceptions.py            # Custom exception hierarchy
-├── types.py                 # TypedDict definitions
+├── data_types.py            # TypedDict definitions
 ├── constants.py             # Application constants
 └── utils/                   # Utility modules
     ├── file_operations.py   # File handling utilities

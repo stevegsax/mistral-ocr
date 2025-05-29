@@ -17,7 +17,7 @@ from .constants import (
 )
 from .database import Database
 from .exceptions import JobError, JobNotFoundError, RetryableError
-from .types import APIJobResponse, JobDetails, JobInfo
+from .data_types import APIJobResponse, JobDetails, JobInfo
 from .utils.retry_manager import with_retry
 from .validation import validate_job_id
 

@@ -1,6 +1,6 @@
 """Mistral OCR client library."""
 
-from . import constants, types
+from . import constants, data_types
 from ._version import __version__
 from .client import MistralOCRClient
 from .exceptions import (
