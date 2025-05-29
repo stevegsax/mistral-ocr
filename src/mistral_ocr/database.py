@@ -79,7 +79,7 @@ class Database:
         """)
 
         self.connection.commit()
-        
+
         # Handle schema migrations for existing databases
         self._migrate_schema()
 
@@ -89,7 +89,7 @@ class Database:
             raise DatabaseConnectionError("Database not connected")
 
         cursor = self.connection.cursor()
-        
+
         # List of new columns to add with their SQL types
         new_columns = [
             ("last_api_refresh", "TIMESTAMP"),
@@ -100,16 +100,16 @@ class Database:
             ("input_files_json", "TEXT"),
             ("output_file", "TEXT"),
             ("errors_json", "TEXT"),
-            ("metadata_json", "TEXT")
+            ("metadata_json", "TEXT"),
         ]
-        
+
         for column_name, column_type in new_columns:
             try:
                 cursor.execute(f"SELECT {column_name} FROM jobs LIMIT 1")
             except sqlite3.OperationalError:
                 # Column doesn't exist, add it
                 cursor.execute(f"ALTER TABLE jobs ADD COLUMN {column_name} {column_type}")
-                
+
         # Make file_count nullable for existing databases
         try:
             cursor.execute("SELECT sql FROM sqlite_master WHERE name='jobs' AND type='table'")
@@ -120,14 +120,14 @@ class Database:
                 pass
         except sqlite3.OperationalError:
             pass
-        
+
         # Add downloaded column to documents table if it doesn't exist
         try:
             cursor.execute("SELECT downloaded FROM documents LIMIT 1")
         except sqlite3.OperationalError:
             # Column doesn't exist, add it
             cursor.execute("ALTER TABLE documents ADD COLUMN downloaded BOOLEAN DEFAULT FALSE")
-            
+
         self.connection.commit()
 
     def execute(self, query: str, params: Optional[Tuple] = None) -> Any:
@@ -139,7 +139,7 @@ class Database:
 
         Returns:
             Query result (cursor for SELECT queries, None for other operations)
-            
+
         Raises:
             DatabaseConnectionError: If database connection is not established
             DatabaseOperationError: If SQL execution fails
@@ -209,7 +209,9 @@ class Database:
         )
         self.connection.commit()
 
-    def store_job(self, job_id: str, document_uuid: str, status: str, file_count: Optional[int] = None) -> None:
+    def store_job(
+        self, job_id: str, document_uuid: str, status: str, file_count: Optional[int] = None
+    ) -> None:
         """Store job metadata.
 
         Args:
@@ -295,8 +297,10 @@ class Database:
             (status, api_response_json, job_id),
         )
         self.connection.commit()
-        
-    def store_job_full_api_data(self, job_id: str, document_uuid: str, api_data: APIJobResponse) -> None:
+
+    def store_job_full_api_data(
+        self, job_id: str, document_uuid: str, api_data: APIJobResponse
+    ) -> None:
         """Store complete job information from API response.
 
         Args:
@@ -308,9 +312,11 @@ class Database:
             raise DatabaseConnectionError("Database not connected")
 
         # Serialize lists and dicts to JSON
-        input_files_json = json.dumps(api_data.get('input_files')) if api_data.get('input_files') else None
-        errors_json = json.dumps(api_data.get('errors')) if api_data.get('errors') else None
-        metadata_json = json.dumps(api_data.get('metadata')) if api_data.get('metadata') else None
+        input_files_json = (
+            json.dumps(api_data.get("input_files")) if api_data.get("input_files") else None
+        )
+        errors_json = json.dumps(api_data.get("errors")) if api_data.get("errors") else None
+        metadata_json = json.dumps(api_data.get("metadata")) if api_data.get("metadata") else None
         api_response_json = json.dumps(api_data, default=str)
 
         cursor = self.connection.cursor()
@@ -324,16 +330,22 @@ class Database:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
         """,
             (
-                job_id, document_uuid, api_data.get('status'), 
-                api_data.get('total_requests'),
-                api_data.get('created_at'), api_data.get('completed_at'),
-                api_data.get('total_requests'), input_files_json,
-                api_data.get('output_file'), errors_json, metadata_json,
-                api_response_json
+                job_id,
+                document_uuid,
+                api_data.get("status"),
+                api_data.get("total_requests"),
+                api_data.get("created_at"),
+                api_data.get("completed_at"),
+                api_data.get("total_requests"),
+                input_files_json,
+                api_data.get("output_file"),
+                errors_json,
+                metadata_json,
+                api_response_json,
             ),
         )
         self.connection.commit()
-        
+
     def update_job_full_api_data(self, job_id: str, api_data: APIJobResponse) -> None:
         """Update existing job with complete API information.
 
@@ -345,9 +357,11 @@ class Database:
             raise DatabaseConnectionError("Database not connected")
 
         # Serialize lists and dicts to JSON
-        input_files_json = json.dumps(api_data.get('input_files')) if api_data.get('input_files') else None
-        errors_json = json.dumps(api_data.get('errors')) if api_data.get('errors') else None
-        metadata_json = json.dumps(api_data.get('metadata')) if api_data.get('metadata') else None
+        input_files_json = (
+            json.dumps(api_data.get("input_files")) if api_data.get("input_files") else None
+        )
+        errors_json = json.dumps(api_data.get("errors")) if api_data.get("errors") else None
+        metadata_json = json.dumps(api_data.get("metadata")) if api_data.get("metadata") else None
         api_response_json = json.dumps(api_data, default=str)
 
         cursor = self.connection.cursor()
@@ -361,9 +375,16 @@ class Database:
             WHERE job_id = ?
         """,
             (
-                api_data.get('status'), api_data.get('created_at'), api_data.get('completed_at'),
-                api_data.get('total_requests'), input_files_json, api_data.get('output_file'),
-                errors_json, metadata_json, api_response_json, job_id
+                api_data.get("status"),
+                api_data.get("created_at"),
+                api_data.get("completed_at"),
+                api_data.get("total_requests"),
+                input_files_json,
+                api_data.get("output_file"),
+                errors_json,
+                metadata_json,
+                api_response_json,
+                job_id,
             ),
         )
         self.connection.commit()
@@ -510,20 +531,20 @@ class Database:
                 input_files = json.loads(row[6]) if row[6] else None
             except (json.JSONDecodeError, TypeError):
                 input_files = None
-                
+
             try:
                 errors = json.loads(row[8]) if row[8] else None
             except (json.JSONDecodeError, TypeError):
                 errors = None
-                
+
             try:
                 metadata = json.loads(row[9]) if row[9] else None
             except (json.JSONDecodeError, TypeError):
                 metadata = None
-            
+
             job_info = JobInfo(
-                id=row[0], 
-                status=row[1], 
+                id=row[0],
+                status=row[1],
                 submitted=row[2],
                 created_at=row[3],
                 completed_at=row[4],
@@ -532,7 +553,7 @@ class Database:
                 output_file=row[7],
                 errors=errors,
                 metadata=metadata,
-                last_api_refresh=row[10]
+                last_api_refresh=row[10],
             )
             jobs.append(job_info)
 
@@ -573,12 +594,12 @@ class Database:
             input_files = json.loads(result[11]) if result[11] else None
         except (json.JSONDecodeError, TypeError):
             input_files = None
-            
+
         try:
             errors = json.loads(result[13]) if result[13] else None
         except (json.JSONDecodeError, TypeError):
             errors = None
-            
+
         try:
             metadata = json.loads(result[14]) if result[14] else None
         except (json.JSONDecodeError, TypeError):
@@ -601,7 +622,7 @@ class Database:
             input_files=input_files,
             output_file=result[12],
             errors=errors,
-            metadata=metadata
+            metadata=metadata,
         )
 
         return job_details

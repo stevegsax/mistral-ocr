@@ -1,1 +1,1 @@
-"""Unit tests for mistral-ocr components."""
+"""Unit tests for Mistral OCR components."""

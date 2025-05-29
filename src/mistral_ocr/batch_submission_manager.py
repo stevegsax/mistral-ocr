@@ -3,7 +3,7 @@
 import json
 import os
 import pathlib
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 import structlog
 
@@ -19,6 +19,7 @@ from .database import Database
 from .document_manager import DocumentManager
 from .exceptions import JobSubmissionError, RetryableError
 from .files import FileCollector
+from .progress import ProgressManager
 from .types import BatchFileBody, BatchFileEntry, DocumentContent
 from .utils.file_operations import FileEncodingUtils, TempFileUtils
 from .utils.retry_manager import with_retry
@@ -41,6 +42,7 @@ class BatchSubmissionManager:
         document_manager: DocumentManager,
         file_collector: FileCollector,
         logger: structlog.BoundLogger,
+        progress_manager: Optional[ProgressManager] = None,
         mock_mode: bool = False,
     ) -> None:
         """Initialize the batch submission manager.
@@ -51,6 +53,7 @@ class BatchSubmissionManager:
             document_manager: Document manager for UUID/name resolution
             file_collector: File collector for gathering files
             logger: Logger instance for logging operations
+            progress_manager: Progress manager for UI updates
             mock_mode: Whether to use mock mode for testing
         """
         self.database = database
@@ -58,6 +61,7 @@ class BatchSubmissionManager:
         self.document_manager = document_manager
         self.file_collector = file_collector
         self.logger = logger
+        self.progress_manager = progress_manager
         self.mock_mode = mock_mode
 
     def _create_file_batches(
@@ -142,7 +146,9 @@ class BatchSubmissionManager:
                 raise
 
     @with_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
-    def _api_create_batch_job(self, input_file_ids: List[str], endpoint: str, model: str, metadata: dict):
+    def _api_create_batch_job(
+        self, input_file_ids: List[str], endpoint: str, model: str, metadata: dict
+    ):
         """Create batch job via API with retry logic.
         
         Args:
@@ -172,7 +178,7 @@ class BatchSubmissionManager:
                 raise
 
     def _submit_real_batch(
-        self, batch_files: List[pathlib.Path], document_uuid: str, model: str
+        self, batch_files: List[pathlib.Path], document_uuid: str, model: str, progress_ctx: Optional[Any] = None
     ) -> str:
         """Submit a real batch to the Mistral API.
 
@@ -180,6 +186,7 @@ class BatchSubmissionManager:
             batch_files: Files in the batch
             document_uuid: Document UUID for association
             model: OCR model to use
+            progress_ctx: Optional progress context for tracking uploads
 
         Returns:
             Job ID from the API
@@ -189,10 +196,20 @@ class BatchSubmissionManager:
         batch_file_path = self._create_batch_file(batch_files)
 
         try:
-            # Upload the batch file with retry logic
+            # Upload the batch file with retry logic and progress tracking
             self.logger.info(f"Uploading batch file: {batch_file_path.name}")
+            
+            if progress_ctx:
+                # Track upload progress for this batch file
+                file_size = batch_file_path.stat().st_size
+                progress_ctx.start_upload(batch_file_path.name, file_size)
+            
             batch_upload = self._api_upload_file(batch_file_path, BATCH_FILE_PURPOSE)
             self.logger.info(f"Batch file uploaded with ID: {batch_upload.id}")
+            
+            if progress_ctx:
+                # Complete upload tracking
+                progress_ctx.complete_upload(batch_file_path.name)
 
             # Create batch job with retry logic
             self.logger.info(f"Creating batch job with model: {model}")
@@ -223,6 +240,7 @@ class BatchSubmissionManager:
         batch_files: List[pathlib.Path],
         document_uuid: str,
         model: str,
+        progress_ctx: Optional[Any] = None,
     ) -> str:
         """Process a single batch of files.
 
@@ -232,6 +250,7 @@ class BatchSubmissionManager:
             batch_files: Files in this batch
             document_uuid: Document UUID for association
             model: OCR model to use
+            progress_ctx: Optional progress context for tracking uploads
 
         Returns:
             Job ID for this batch
@@ -247,7 +266,7 @@ class BatchSubmissionManager:
             if self.mock_mode:
                 job_id = self._submit_mock_batch(batch_files, document_uuid)
             else:
-                job_id = self._submit_real_batch(batch_files, document_uuid, model)
+                job_id = self._submit_real_batch(batch_files, document_uuid, model, progress_ctx)
 
             # Store job metadata
             self.database.store_job(job_id, document_uuid, "pending", len(batch_files))
@@ -285,6 +304,25 @@ class BatchSubmissionManager:
             FileNotFoundError: If any file or directory does not exist
             ValueError: If any file has an unsupported file type
         """
+        # Use progress tracking if available
+        if self.progress_manager and self.progress_manager.enabled:
+            return self._submit_documents_with_progress(
+                files, recursive, document_name, document_uuid, model
+            )
+        else:
+            return self._submit_documents_basic(
+                files, recursive, document_name, document_uuid, model
+            )
+
+    def _submit_documents_basic(
+        self,
+        files: List[pathlib.Path],
+        recursive: bool = False,
+        document_name: Optional[str] = None,
+        document_uuid: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> Union[str, List[str]]:
+        """Submit documents without progress tracking (original implementation)."""
         # Collect and validate files
         actual_files = self.file_collector.gather_valid_files_for_processing(files, recursive)
 
@@ -315,6 +353,88 @@ class BatchSubmissionManager:
 
         # Return single job ID if only one batch, otherwise return list
         return job_ids[0] if len(job_ids) == 1 else job_ids
+
+    def _submit_documents_with_progress(
+        self,
+        files: List[pathlib.Path],
+        recursive: bool = False,
+        document_name: Optional[str] = None,
+        document_uuid: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> Union[str, List[str]]:
+        """Submit documents with progress tracking."""
+        # Initial file collection with progress
+        tracker = self.progress_manager.create_submission_progress()
+        
+        # Collect and validate files with progress
+        actual_files = self._collect_files_with_progress(files, recursive, tracker)
+
+        # Handle document creation/association
+        document_uuid, resolved_document_name = (
+            self.document_manager.resolve_document_uuid_and_name(document_name, document_uuid)
+        )
+
+        # Create file batches
+        batches = self._create_file_batches(actual_files)
+        
+        ocr_model = model or DEFAULT_OCR_MODEL
+
+        # Process batches with progress tracking
+        job_ids = []
+        with tracker.track_submission(len(actual_files), len(batches)) as progress_ctx:
+            
+            # Complete file collection phase
+            progress_ctx.complete_collection(len(actual_files))
+            
+            # Process each batch with progress
+            for batch_idx, batch_files in enumerate(batches, 1):
+                job_id = self._process_batch_with_progress(
+                    batch_idx, len(batches), batch_files, document_uuid, ocr_model, progress_ctx
+                )
+                job_ids.append(job_id)
+                progress_ctx.update_job_creation(batch_idx)
+            
+            progress_ctx.complete_job_creation()
+
+        # Log completion summary
+        self._log_completion_summary(job_ids)
+
+        # Return single job ID if only one batch, otherwise return list
+        return job_ids[0] if len(job_ids) == 1 else job_ids
+
+    def _collect_files_with_progress(
+        self, files: List[pathlib.Path], recursive: bool, tracker: Any
+    ) -> List[pathlib.Path]:
+        """Collect files with progress feedback."""
+        # For now, use the existing method - could be enhanced later
+        # to provide real-time feedback during collection
+        return self.file_collector.gather_valid_files_for_processing(files, recursive)
+
+    def _process_batch_with_progress(
+        self,
+        batch_idx: int,
+        total_batches: int,
+        batch_files: List[pathlib.Path],
+        document_uuid: str,
+        model: str,
+        progress_ctx: Any,
+    ) -> str:
+        """Process a single batch with progress tracking."""
+        # Start encoding progress for this batch
+        files_processed = 0
+        for i, file_path in enumerate(batch_files, 1):
+            # Update encoding progress
+            progress_ctx.update_encoding(files_processed + i)
+        
+        # Mark encoding complete for this batch
+        files_processed += len(batch_files)
+
+        # Process the batch (upload + job creation)
+        job_id = self._process_single_batch(
+            batch_idx, total_batches, batch_files, document_uuid, model, progress_ctx
+        )
+        
+        return job_id
 
     def _log_completion_summary(self, job_ids: List[str]) -> None:
         """Log completion summary for submitted jobs.

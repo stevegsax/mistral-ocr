@@ -1,3 +1,5 @@
+"""Job status listing integration tests for Mistral OCR."""
+
 import os
 import pathlib
 import subprocess
@@ -5,17 +7,8 @@ import subprocess
 import pytest
 
 from mistral_ocr.client import MistralOCRClient
-from mistral_ocr.config import ConfigurationManager
-from mistral_ocr.database import Database
-from mistral_ocr.logging import get_logger, setup_logging
-from mistral_ocr.exceptions import (
-    UnsupportedFileTypeError,
-    InvalidJobIdError,
-    JobNotCompletedError,
-)
 
 
-# Helper function to run the CLI
 def run_cli(*args: str) -> subprocess.CompletedProcess:
     """Run the CLI with the local package path and isolated test environment."""
     env = {**os.environ, "PYTHONPATH": "src", "MISTRAL_API_KEY": "test"}
@@ -35,55 +28,10 @@ def run_cli(*args: str) -> subprocess.CompletedProcess:
     )
 
 
-# Helper function to create test files
-def create_test_files(
-    directory: pathlib.Path, count: int = 2, extension: str = ".png"
-) -> list[pathlib.Path]:
-    """Create test files in a directory."""
-    directory.mkdir(parents=True, exist_ok=True)
-    files = []
-    for i in range(count):
-        file = directory / f"test_{i}{extension}"
-        file.write_bytes(f"content_{i}".encode())
-        files.append(file)
-    return files
-
-
-# Fixtures
-@pytest.fixture
-def client(xdg_data_home):
-    """Provide a test MistralOCRClient instance with isolated database."""
-    return MistralOCRClient(api_key="test")
-
-
-@pytest.fixture
-def png_file(tmp_path):
-    """Create a test PNG file."""
-    file = tmp_path / "test.png"
-    file.write_bytes(b"fakepng")
-    return file
-
-
-@pytest.fixture
-def jpeg_file(tmp_path):
-    """Create a test JPEG file."""
-    file = tmp_path / "test.jpg"
-    file.write_bytes(b"fakejpeg")
-    return file
-
-
-@pytest.fixture
-def pdf_file(tmp_path):
-    """Create a test PDF file."""
-    file = tmp_path / "test.pdf"
-    file.write_bytes(b"fakepdf")
-    return file
-
-
 @pytest.fixture
 def xdg_data_home(tmp_path, monkeypatch):
     """Set XDG_DATA_HOME and XDG_STATE_HOME to tmp_path for testing.
-    
+
     This ensures both data and state (including database) are isolated to test directories.
     """
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
@@ -91,182 +39,7 @@ def xdg_data_home(tmp_path, monkeypatch):
     return tmp_path
 
 
-# Basic Integrity Checks
-
-
-# Basic Integrity Checks
-@pytest.mark.unit
-class TestBasicIntegrity:
-    """Tests for basic system integrity and setup."""
-
-    def test_display_help_message(self) -> None:
-        result = run_cli("--help")
-        assert result.returncode == 0
-        assert "usage" in result.stdout.lower()
-
-    def test_version_command(self) -> None:
-        result = run_cli("--version")
-        assert result.returncode == 0
-        assert "mistral-ocr" in result.stdout
-        assert "0.2.0" in result.stdout
-
-    def test_configuration_availability(self) -> None:
-        config = ConfigurationManager()
-        assert config is not None
-
-    def test_log_file_creation(self, tmp_path: pathlib.Path) -> None:
-        log_dir = tmp_path / "logs"
-        log_dir.mkdir()
-        log_file = setup_logging(log_dir)
-        logger = get_logger("test")
-        logger.error("test message")
-        assert log_file.exists()
-        assert "test message" in log_file.read_text()
-
-    def test_database_connectivity(self, tmp_path: pathlib.Path) -> None:
-        db = Database(tmp_path / "test.db")
-        db.connect()
-        db.execute("CREATE TABLE example (name TEXT)")
-        db.execute("INSERT INTO example (name) VALUES ('abc')")
-        result = db.execute("SELECT name FROM example LIMIT 1")
-        assert result == "abc"
-
-
-# File Submission Tests
-@pytest.mark.unit
-class TestFileSubmission:
-    """Tests for file submission functionality."""
-
-    @pytest.mark.parametrize(
-        "extension,content", [(".png", b"fakepng"), (".jpg", b"fakejpeg"), (".pdf", b"fakepdf")]
-    )
-    def test_submit_single_file(
-        self, tmp_path: pathlib.Path, client: MistralOCRClient, extension: str, content: bytes
-    ) -> None:
-        test_file = tmp_path / f"test{extension}"
-        test_file.write_bytes(content)
-        job_id = client.submit_documents([test_file])
-        assert job_id is not None
-
-    def test_unsupported_file_type(self, tmp_path: pathlib.Path, client: MistralOCRClient) -> None:
-        invalid_file = tmp_path / "file.txt"
-        invalid_file.write_text("text")
-        with pytest.raises(UnsupportedFileTypeError):
-            client.submit_documents([invalid_file])
-
-    def test_file_not_found(self, client: MistralOCRClient) -> None:
-        with pytest.raises(FileNotFoundError):
-            client.submit_documents([pathlib.Path("missing.png")])
-
-    def test_submit_directory_non_recursive(
-        self, tmp_path: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        directory = tmp_path / "docs"
-        create_test_files(directory, count=2)
-        job_id = client.submit_documents([directory])
-        assert job_id is not None
-
-    def test_submit_directory_recursive(
-        self, tmp_path: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        directory = tmp_path / "docs"
-        sub = directory / "sub"
-        create_test_files(sub, count=1)
-        job_id = client.submit_documents([directory], recursive=True)  # type: ignore
-        assert job_id is not None
-
-    def test_automatic_batch_partitioning(
-        self, tmp_path: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        files = create_test_files(tmp_path / "docs", count=105)
-        job_ids = client.submit_documents(files)
-        assert len(job_ids) > 1
-
-
-# Document Management Tests
-class TestDocumentManagement:
-    """Tests for document naming and association."""
-
-    def test_create_new_document_by_name(
-        self, png_file: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        job_id = client.submit_documents([png_file], document_name="Doc")  # type: ignore
-        assert job_id is not None
-
-    def test_append_pages_to_recent_document(
-        self, png_file: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        client.submit_documents([png_file], document_name="Doc")  # type: ignore
-        job_id = client.submit_documents([png_file], document_name="Doc")  # type: ignore
-        assert job_id is not None
-
-    def test_append_pages_to_document_by_uuid(
-        self, png_file: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        doc_id = "1234"
-        job_id = client.submit_documents([png_file], document_uuid=doc_id)  # type: ignore
-        assert job_id is not None
-
-
-# Job Management Tests
-class TestJobManagement:
-    """Tests for job status and management."""
-
-    def test_check_job_status_by_id(self, client: MistralOCRClient) -> None:
-        status = client.check_job_status("job123")
-        assert status in {"pending", "processing", "completed", "failed"}
-
-    def test_query_status_by_document_name(self, client: MistralOCRClient) -> None:
-        statuses = client.query_document_status("Doc")
-        assert isinstance(statuses, list)
-
-    def test_cancel_job(self, client: MistralOCRClient) -> None:
-        result = client.cancel_job("job123")
-        assert result is True
-
-    def test_invalid_job_id(self, client: MistralOCRClient) -> None:
-        with pytest.raises(InvalidJobIdError):
-            client.check_job_status("invalid")
-
-
-# Result Retrieval Tests
-class TestResultRetrieval:
-    """Tests for result download and retrieval."""
-
-    def test_retrieve_results_for_completed_job(self, client: MistralOCRClient) -> None:
-        results = client.get_results("job123")
-        assert isinstance(results, list)
-
-    def test_retrieve_before_completion(self, client: MistralOCRClient) -> None:
-        # Reset mock counter to ensure predictable behavior
-        from mistral_ocr.result_manager import ResultManager
-        ResultManager._mock_get_results_call_count = 0
-        
-        # First call returns empty results, second call raises exception (mock behavior)
-        client.get_results("job123")
-        with pytest.raises(JobNotCompletedError):
-            client.get_results("job123")
-
-    def test_automatic_download_results(
-        self, tmp_path: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        client.download_results("job123", destination=tmp_path)  # type: ignore
-        assert (tmp_path / "job123").exists()
-
-    def test_unknown_document_storage(
-        self, tmp_path: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        client.download_results("job123", destination=tmp_path)  # type: ignore
-        assert (tmp_path / "unknown").exists()
-
-    def test_redownload_results(self, tmp_path: pathlib.Path, client: MistralOCRClient) -> None:
-        client.download_results("job123", destination=tmp_path)  # type: ignore
-        client.download_results("job123", destination=tmp_path)  # type: ignore
-        assert (tmp_path / "job123").exists()
-
-
-# Job Status Listing Tests
-@pytest.mark.integration  
+@pytest.mark.integration
 class TestJobStatusListing:
     """Tests for job status listing functionality."""
 
@@ -311,12 +84,13 @@ class TestJobStatusListing:
     def test_job_detail_status_invalid_id(self) -> None:
         """Test job detail command with invalid job ID."""
         from unittest.mock import patch
+
         from mistral_ocr.exceptions import JobNotFoundError
-        
+
         # Mock the get_job_details method to raise JobNotFoundError
-        with patch('mistral_ocr.client.MistralOCRClient.get_job_details') as mock_get_details:
+        with patch("mistral_ocr.client.MistralOCRClient.get_job_details") as mock_get_details:
             mock_get_details.side_effect = JobNotFoundError("Job not found")
-            
+
             result = run_cli("--job-status", "invalid_job")
             assert result.returncode != 0
             assert "error" in result.stderr.lower() or "not found" in result.stderr.lower()
@@ -327,25 +101,27 @@ class TestJobStatusListing:
         assert result.returncode == 0
         # Should have header and proper column alignment
         lines = result.stdout.split("\n")
-        
+
         # Check for table structure (either with jobs or just headers)
         if any(line.strip() for line in lines):  # Has any content
             # Look for header text indicating table format
             output_text = result.stdout
-            assert ("Job ID" in output_text or 
-                   "No jobs found" in output_text or
-                   "job" in output_text.lower())
+            assert (
+                "Job ID" in output_text
+                or "No jobs found" in output_text
+                or "job" in output_text.lower()
+            )
 
     def test_list_jobs_refreshes_from_api(
         self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
     ) -> None:
         """Test that list jobs refreshes status from Mistral API in real mode."""
-        from mistral_ocr.client import MistralOCRClient
         from unittest.mock import Mock, patch
 
         # Create client in real mode (not test mode)
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False  # Force real mode for this test
+        client.job_manager.mock_mode = False  # Ensure job manager is also in real mode
 
         # Create a realistic job with stale status in database
         test_doc_uuid = "real-doc-uuid-refresh"
@@ -365,7 +141,7 @@ class TestJobStatusListing:
         mock_response = Mock()
         mock_response.data = [mock_api_job]
 
-        with patch.object(client.client.batch.jobs, 'list', return_value=mock_response):
+        with patch.object(client.client.batch.jobs, "list", return_value=mock_response):
             # Call list_all_jobs - should refresh from API using batch list call
             jobs = client.list_all_jobs()
 
@@ -380,26 +156,32 @@ class TestJobStatusListing:
         self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
     ) -> None:
         """Test that list jobs uses efficient batch API call instead of individual calls."""
-        from mistral_ocr.client import MistralOCRClient
         from unittest.mock import Mock, patch
 
         # Create client in real mode (not test mode)
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False  # Force real mode for this test
+        client.job_manager.mock_mode = False  # Ensure job manager is also in real mode
 
         # Create realistic jobs with different statuses
         real_doc_uuid = "real-doc-uuid-batch"
         client.database.store_document(real_doc_uuid, "Real Document")
-        client.database.store_job("b2c3d4e5-f6a7-8901-bcde-f23456789012", real_doc_uuid, "SUCCESS", 1)
-        client.database.store_job("c3d4e5f6-a7b8-9012-cdef-345678901234", real_doc_uuid, "pending", 1)
-        client.database.store_job("d4e5f6a7-b8c9-0123-defa-456789012345", real_doc_uuid, "running", 1)
+        client.database.store_job(
+            "b2c3d4e5-f6a7-8901-bcde-f23456789012", real_doc_uuid, "SUCCESS", 1
+        )
+        client.database.store_job(
+            "c3d4e5f6-a7b8-9012-cdef-345678901234", real_doc_uuid, "pending", 1
+        )
+        client.database.store_job(
+            "d4e5f6a7-b8c9-0123-defa-456789012345", real_doc_uuid, "running", 1
+        )
 
         # Mock API jobs with updated statuses
         mock_jobs = []
         for job_id, status in [
             ("b2c3d4e5-f6a7-8901-bcde-f23456789012", "SUCCESS"),
             ("c3d4e5f6-a7b8-9012-cdef-345678901234", "SUCCESS"),  # Updated from pending
-            ("d4e5f6a7-b8c9-0123-defa-456789012345", "SUCCESS")   # Updated from running
+            ("d4e5f6a7-b8c9-0123-defa-456789012345", "SUCCESS"),  # Updated from running
         ]:
             mock_job = Mock()
             mock_job.id = job_id
@@ -411,14 +193,15 @@ class TestJobStatusListing:
 
         mock_response = Mock()
         mock_response.data = mock_jobs
-        
+
         list_call_count = 0
+
         def mock_list():
             nonlocal list_call_count
             list_call_count += 1
             return mock_response
 
-        with patch.object(client.client.batch.jobs, 'list', side_effect=mock_list):
+        with patch.object(client.client.batch.jobs, "list", side_effect=mock_list):
             # Call list_all_jobs - should use single batch API call
             jobs = client.list_all_jobs()
 
@@ -426,12 +209,16 @@ class TestJobStatusListing:
             assert list_call_count == 1
 
             # Verify all jobs were updated, including pending jobs
-            pending_job = next((job for job in jobs if job["id"] == "c3d4e5f6-a7b8-9012-cdef-345678901234"), None)
-            running_job = next((job for job in jobs if job["id"] == "d4e5f6a7-b8c9-0123-defa-456789012345"), None)
-            
+            pending_job = next(
+                (job for job in jobs if job["id"] == "c3d4e5f6-a7b8-9012-cdef-345678901234"), None
+            )
+            running_job = next(
+                (job for job in jobs if job["id"] == "d4e5f6a7-b8c9-0123-defa-456789012345"), None
+            )
+
             assert pending_job is not None
             assert pending_job["status"] == "SUCCESS"  # Updated from pending
-            assert running_job is not None  
+            assert running_job is not None
             assert running_job["status"] == "SUCCESS"  # Updated from running
 
             # Verify all jobs are still returned
@@ -444,8 +231,6 @@ class TestJobStatusListing:
         self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
     ) -> None:
         """Test that test jobs are hidden in real mode but shown in mock mode."""
-        from mistral_ocr.client import MistralOCRClient
-
         # Create client in real mode
         client = MistralOCRClient(api_key="real-api-key")
         client.mock_mode = False
@@ -462,7 +247,9 @@ class TestJobStatusListing:
         client.database.store_job("job123", test_doc_uuid, "completed", 1)
 
         # Add production job (should be shown) - use UUID-like pattern
-        client.database.store_job("f47ac10b-58cc-4372-a567-0e02b2c3d479", real_doc_uuid, "SUCCESS", 1)
+        client.database.store_job(
+            "f47ac10b-58cc-4372-a567-0e02b2c3d479", real_doc_uuid, "SUCCESS", 1
+        )
 
         # Mock check_job_status to avoid actual API calls
         def mock_check_status(job_id):
@@ -486,8 +273,6 @@ class TestJobStatusListing:
         self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
     ) -> None:
         """Test that test jobs are shown in mock mode for testing purposes."""
-        from mistral_ocr.client import MistralOCRClient
-
         # Create client in mock mode
         client = MistralOCRClient(api_key="test")
         assert client.mock_mode
@@ -510,7 +295,6 @@ class TestJobStatusListing:
         self, tmp_path: pathlib.Path, xdg_data_home: pathlib.Path
     ) -> None:
         """Test that API refresh information is stored correctly."""
-        from mistral_ocr.client import MistralOCRClient
         from unittest.mock import Mock, patch
 
         # Create client in real mode
@@ -534,11 +318,11 @@ class TestJobStatusListing:
         mock_api_job.errors = None
         mock_api_job.total_requests = 1
 
-        with patch.object(client.client.batch.jobs, 'get', return_value=mock_api_job):
+        with patch.object(client.client.batch.jobs, "get", return_value=mock_api_job):
             # Call check_job_status first to ensure API refresh data is stored
             status = client.check_job_status("test-tracking-job")
             assert status == "completed"
-            
+
             # Then call get_job_details which should have the refresh data
             job_details = client.get_job_details("test-tracking-job")
 
@@ -549,53 +333,10 @@ class TestJobStatusListing:
 
             # Verify API response JSON contains expected fields
             import json
+
             api_data = json.loads(job_details["api_response_json"])
             assert api_data["id"] == "test-tracking-job"
         assert api_data["status"] == "completed"
         assert api_data["created_at"] == "2023-12-01T10:00:00Z"
         assert api_data["completed_at"] == "2023-12-01T10:05:00Z"
         assert "refresh_timestamp" in api_data
-
-
-# Advanced Options and CLI Tests
-class TestAdvancedOptions:
-    """Tests for advanced options and CLI functionality."""
-
-    def test_specify_custom_model(self, png_file: pathlib.Path, client: MistralOCRClient) -> None:
-        job_id = client.submit_documents([png_file], model="test-model")
-        assert job_id is not None
-
-    @pytest.mark.parametrize(
-        "args,description",
-        [
-            (["--submit", "file.png"], "CLI submission"),
-            (["--check-job", "job123"], "CLI status check"),
-            (["--get-results", "job123"], "CLI result retrieval"),
-        ],
-    )
-    def test_command_line_operations(
-        self, tmp_path: pathlib.Path, args: list[str], description: str
-    ) -> None:
-        # Create a test file if needed for submission
-        if args[0] == "--submit":
-            test_file = tmp_path / "file.png"
-            test_file.write_bytes(b"test")
-            args[1] = str(test_file)
-
-        result = run_cli(*args)
-        assert result.returncode == 0
-        assert "job" in result.stdout.lower() or "results" in result.stdout.lower()
-
-    def test_logging_of_errors(self, xdg_data_home: pathlib.Path, client: MistralOCRClient) -> None:
-        log_file = xdg_data_home / "mistral-ocr" / "mistral.log"
-        with pytest.raises(FileNotFoundError):
-            client.submit_documents([pathlib.Path("missing.png")])
-        assert log_file.exists()
-        assert "File not found" in log_file.read_text()
-
-    def test_batch_processing_for_cost_management(
-        self, tmp_path: pathlib.Path, client: MistralOCRClient
-    ) -> None:
-        files = create_test_files(tmp_path / "docs", count=105)
-        job_ids = client.submit_documents(files)
-        assert all(len(batch) <= 100 for batch in job_ids)  # type: ignore

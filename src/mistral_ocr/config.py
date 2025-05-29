@@ -9,8 +9,10 @@ from .constants import (
     API_KEY_ENV_VAR,
     DEFAULT_API_TIMEOUT_SECONDS,
     DEFAULT_DOWNLOAD_DIR_NAME,
+    DEFAULT_JOB_MONITOR_INTERVAL,
     DEFAULT_MAX_RETRIES,
     DEFAULT_OCR_MODEL,
+    DEFAULT_PROGRESS_ENABLED,
     JSON_INDENT_SPACES,
 )
 from .paths import XDGPaths
@@ -35,23 +37,23 @@ class ConfigurationManager:
     @validate_api_key
     def validate_api_key(self, api_key: str) -> None:
         """Validate an API key format.
-        
+
         Args:
             api_key: The API key to validate
-            
+
         Raises:
             InvalidConfigurationError: If the API key format is invalid
         """
         # Validation logic is now handled by the decorator
         pass
-    
+
     @validate_model_name
     def validate_model_name(self, model: str) -> None:
         """Validate a model name format.
-        
+
         Args:
             model: The model name to validate
-            
+
         Raises:
             InvalidConfigurationError: If the model name is invalid
         """
@@ -117,7 +119,7 @@ class ConfigurationManager:
 
         Args:
             api_key: API key to store
-            
+
         Raises:
             InvalidConfigurationError: If the API key is invalid
         """
@@ -137,7 +139,7 @@ class ConfigurationManager:
 
         Args:
             model: Model name to use as default
-            
+
         Raises:
             InvalidConfigurationError: If the model name is invalid
         """
@@ -162,7 +164,7 @@ class ConfigurationManager:
 
         Args:
             path: Path to download directory
-            
+
         Raises:
             InvalidConfigurationError: If the path is invalid
         """
@@ -171,7 +173,7 @@ class ConfigurationManager:
 
     def get_timeout(self) -> int:
         """Get the API timeout in seconds.
-        
+
         Returns:
             Timeout value in seconds (default: 300)
         """
@@ -180,23 +182,23 @@ class ConfigurationManager:
             return int(timeout_str)
         except ValueError:
             return DEFAULT_API_TIMEOUT_SECONDS
-    
+
     @validate_timeout_range
     def set_timeout(self, timeout: int) -> None:
         """Set the API timeout in seconds.
-        
+
         Args:
             timeout: Timeout value in seconds
-            
+
         Raises:
             InvalidConfigurationError: If timeout value is invalid
         """
         # Validation logic is now handled by the decorator
         self.set("api_timeout", str(timeout))
-    
+
     def get_max_retries(self) -> int:
         """Get the maximum number of API retries.
-        
+
         Returns:
             Maximum retry count (default: 3)
         """
@@ -205,20 +207,20 @@ class ConfigurationManager:
             return int(retries_str)
         except ValueError:
             return DEFAULT_MAX_RETRIES
-    
+
     @validate_retry_count
     def set_max_retries(self, retries: int) -> None:
         """Set the maximum number of API retries.
-        
+
         Args:
             retries: Maximum retry count
-            
+
         Raises:
             InvalidConfigurationError: If retry count is invalid
         """
         # Validation logic is now handled by the decorator
         self.set("max_retries", str(retries))
-    
+
     def reset_to_defaults(self) -> None:
         """Reset configuration to default values."""
         # Keep API key but reset other settings
@@ -228,7 +230,7 @@ class ConfigurationManager:
             # Only preserve file-based API key if not in environment
             self.set("api_key", api_key)
         self._save_config()
-    
+
     @property
     def database_path(self) -> pathlib.Path:
         """Get the database file path."""
@@ -238,18 +240,64 @@ class ConfigurationManager:
     def log_directory(self) -> pathlib.Path:
         """Get the log directory."""
         return XDGPaths.get_state_dir()
-    
+
     @property
     def data_directory(self) -> pathlib.Path:
         """Get the data directory."""
         return XDGPaths.get_data_dir()
-    
+
     @property
     def cache_directory(self) -> pathlib.Path:
         """Get the cache directory."""
         return XDGPaths.get_cache_dir()
-    
+
     @property
     def config_directory(self) -> pathlib.Path:
         """Get the config directory."""
         return XDGPaths.get_config_dir()
+
+    def get_progress_enabled(self) -> bool:
+        """Get whether progress displays are enabled.
+
+        Returns:
+            True if progress displays should be shown, False otherwise
+        """
+        progress_str = self.get("progress_enabled", str(DEFAULT_PROGRESS_ENABLED))
+        try:
+            return progress_str.lower() in ("true", "1", "yes", "on")
+        except (ValueError, AttributeError):
+            return DEFAULT_PROGRESS_ENABLED
+
+    def set_progress_enabled(self, enabled: bool) -> None:
+        """Set whether progress displays are enabled.
+
+        Args:
+            enabled: Whether to enable progress displays
+        """
+        self.set("progress_enabled", str(enabled).lower())
+
+    def get_job_monitor_interval(self) -> int:
+        """Get the job monitoring refresh interval in seconds.
+
+        Returns:
+            Refresh interval in seconds (default: 10)
+        """
+        interval_str = self.get("job_monitor_interval", str(DEFAULT_JOB_MONITOR_INTERVAL))
+        try:
+            interval = int(interval_str)
+            return max(1, min(interval, 300))  # Clamp between 1 and 300 seconds
+        except ValueError:
+            return DEFAULT_JOB_MONITOR_INTERVAL
+
+    def set_job_monitor_interval(self, interval: int) -> None:
+        """Set the job monitoring refresh interval.
+
+        Args:
+            interval: Refresh interval in seconds (1-300)
+
+        Raises:
+            ValueError: If interval is outside valid range
+        """
+        if not isinstance(interval, int) or interval < 1 or interval > 300:
+            raise ValueError("Job monitor interval must be between 1 and 300 seconds")
+        self.set("job_monitor_interval", str(interval))

@@ -11,17 +11,17 @@ from .database import Database
 
 class DocumentManager:
     """Manages document creation and UUID/name resolution."""
-    
+
     def __init__(self, database: Database, logger: structlog.BoundLogger) -> None:
         """Initialize the document manager.
-        
+
         Args:
             database: Database instance for document storage
             logger: Logger instance for logging operations
         """
         self.database = database
         self.logger = logger
-    
+
     def resolve_document_uuid_and_name(
         self, document_name: Optional[str], document_uuid: Optional[str]
     ) -> Tuple[str, str]:
@@ -37,7 +37,9 @@ class DocumentManager:
         if document_uuid:
             self.logger.info(f"Using existing document UUID: {document_uuid}")
             # Use existing UUID, generate name if not provided
-            resolved_name = document_name or DOCUMENT_NAME_TEMPLATE.format(uuid_prefix=document_uuid[:UUID_PREFIX_LENGTH])
+            resolved_name = document_name or DOCUMENT_NAME_TEMPLATE.format(
+                uuid_prefix=document_uuid[:UUID_PREFIX_LENGTH]
+            )
             self.database.store_document(document_uuid, resolved_name)
             return document_uuid, resolved_name
 

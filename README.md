@@ -12,6 +12,7 @@ A Python CLI tool for submitting documents to the Mistral OCR service, managing 
 - **Job Tracking**: Check status, cancel jobs, and query by document name
 - **Result Retrieval**: Download OCR results in text and markdown formats
 - **Configuration Management**: CLI commands for API key, model, and directory settings
+- **Progress Monitoring**: Real-time progress bars and status updates during processing
 - **XDG Compliance**: Follows XDG Base Directory specification for config and data
 
 ## Installation
@@ -62,6 +63,21 @@ uv run python -m mistral_ocr --config-set-download-dir "/path/to/downloads"
 
 # Reset all settings to defaults (preserves API key)
 uv run python -m mistral_ocr --config reset
+```
+
+### Progress Monitoring Settings
+
+Configure progress display behavior:
+
+```bash
+# Enable progress bars and real-time updates (default: enabled)
+uv run python -m mistral_ocr --config-set-progress-enabled true
+
+# Disable progress displays for quiet operation
+uv run python -m mistral_ocr --config-set-progress-enabled false
+
+# Set job monitoring refresh interval (1-300 seconds, default: 10)
+uv run python -m mistral_ocr --config-set-monitor-interval 5
 ```
 
 **Configuration File Location**: `~/.config/mistral-ocr/config.json` (follows XDG Base Directory specification)
@@ -151,6 +167,35 @@ uv run python -m mistral_ocr --download-results job_001 --download-to /path/to/s
 # Download all results for a document by name or UUID
 uv run python -m mistral_ocr --download-document "Annual_Report" --download-to /path/to/save/
 ```
+
+### Progress Monitoring
+
+The tool provides real-time progress tracking for long-running operations:
+
+```bash
+# File submission with progress bars showing:
+# - File collection phase
+# - File encoding phase  
+# - Upload progress for batch files
+# - Job creation progress
+uv run python -m mistral_ocr --submit /large_directory/ --recursive
+
+# Monitor job status with live updates (when available)
+uv run python -m mistral_ocr --watch-jobs job_001 job_002
+
+# Download results with progress tracking
+uv run python -m mistral_ocr --download-results job_001
+
+# Disable progress for automated scripts
+uv run python -m mistral_ocr --submit docs/ --quiet
+```
+
+**Progress Features:**
+- **Multi-phase tracking**: Separate progress bars for different operation phases
+- **Upload progress**: Real-time file upload progress with transfer speeds
+- **Status notifications**: Emoji-enhanced status change announcements
+- **Live monitoring**: Real-time job status updates with automatic refresh
+- **Graceful degradation**: Automatically disabled in non-interactive terminals
 
 ### Advanced Examples
 
@@ -258,6 +303,7 @@ uv run python -m mistral_ocr --help
 - Job management: `--check-job`, `--list-jobs`, `--job-status`, `--query-document`, `--cancel-job`
 - Result retrieval: `--get-results`, `--download-results`, `--download-document`, `--download-to`
 - Configuration: `--config`, `--config-set-api-key`, `--config-set-model`, `--config-set-download-dir`
+- Progress settings: `--config-set-progress-enabled`, `--config-set-monitor-interval`, `--quiet`
 
 ## Implementation Notes
 

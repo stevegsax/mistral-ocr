@@ -46,7 +46,9 @@ class OCRResultParser:
 
         return parsed_results
 
-    def _parse_individual_ocr_result(self, result_data: Dict[str, Any], job_id: str) -> Optional[OCRResult]:
+    def _parse_individual_ocr_result(
+        self, result_data: Dict[str, Any], job_id: str
+    ) -> Optional[OCRResult]:
         """Parse an individual OCR result from the batch output.
 
         Args:

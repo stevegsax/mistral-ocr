@@ -33,8 +33,8 @@ from .models import OCRResult
 from .settings import Settings, get_settings
 
 __all__ = [
-    "MistralOCRClient", 
-    "OCRResult", 
+    "MistralOCRClient",
+    "OCRResult",
     "__version__",
     "Settings",
     "get_settings",
@@ -42,7 +42,7 @@ __all__ = [
     "constants",
     "MistralOCRError",
     "DatabaseError",
-    "DatabaseConnectionError", 
+    "DatabaseConnectionError",
     "DatabaseOperationError",
     "FileHandlingError",
     "UnsupportedFileTypeError",

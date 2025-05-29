@@ -12,6 +12,7 @@ from .document_manager import DocumentManager
 from .files import FileCollector
 from .models import OCRResult
 from .parsing import OCRResultParser
+from .progress import ProgressManager
 from .result_manager import ResultManager
 from .settings import Settings, get_settings
 from .types import JobDetails, JobInfo
@@ -19,7 +20,7 @@ from .types import JobDetails, JobInfo
 
 class MistralOCRClient:
     """Client for submitting OCR jobs to the Mistral API.
-    
+
     Acts as a facade coordinating specialized manager components.
     """
 
@@ -31,7 +32,7 @@ class MistralOCRClient:
             settings: Settings instance to use. If None, uses global settings.
         """
         self.settings = settings or get_settings()
-        
+
         # Get API key from parameter, settings, or environment
         if api_key:
             self.api_key = api_key
@@ -50,7 +51,7 @@ class MistralOCRClient:
         self._initialize_logging()
         self._initialize_database()
         self._initialize_utilities()
-        
+
         # Initialize specialized managers
         self._initialize_managers()
 
@@ -75,21 +76,30 @@ class MistralOCRClient:
         """Initialize utility classes."""
         self.file_collector = FileCollector(self.logger)
         self.result_parser = OCRResultParser(self.logger)
-    
+
     def _initialize_managers(self) -> None:
         """Initialize specialized manager components."""
         # Document manager for UUID/name resolution
         self.document_manager = DocumentManager(self.database, self.logger)
-        
+
+        # Progress manager for UI updates (get from settings)
+        progress_enabled = self.settings.get_progress_enabled()
+        self.progress_manager = ProgressManager(enabled=progress_enabled)
+
         # Job management for status tracking and operations
         self.job_manager = BatchJobManager(self.database, self.client, self.logger, self.mock_mode)
-        
+
         # Submission management for batch processing
         self.submission_manager = BatchSubmissionManager(
-            self.database, self.client, self.document_manager, self.file_collector, 
-            self.logger, self.mock_mode
+            self.database,
+            self.client,
+            self.document_manager,
+            self.file_collector,
+            self.logger,
+            self.progress_manager,
+            self.mock_mode,
         )
-        
+
         # Result management for downloading and parsing
         self.result_manager = ResultManager(
             self.database, self.client, self.result_parser, self.logger, self.mock_mode
@@ -110,7 +120,7 @@ class MistralOCRClient:
         """
         return self.document_manager.resolve_document_uuid_and_name(document_name, document_uuid)
 
-    # Submission management methods - delegate to BatchSubmissionManager  
+    # Submission management methods - delegate to BatchSubmissionManager
     def submit_documents(
         self,
         files: List[pathlib.Path],
@@ -175,11 +185,11 @@ class MistralOCRClient:
             True if the job was successfully cancelled, False otherwise
         """
         return self.job_manager.cancel_job(job_id)
-        
+
     def list_all_jobs(self) -> List[JobInfo]:
         """List all jobs with their basic status information.
 
-        In real mode, fetches all jobs from Mistral API, syncs missing jobs to database, 
+        In real mode, fetches all jobs from Mistral API, syncs missing jobs to database,
         and updates existing jobs.
         In mock mode, uses database only.
 
@@ -189,7 +199,7 @@ class MistralOCRClient:
             List of dictionaries containing job information with keys: id, status, submitted
         """
         return self.job_manager.list_all_jobs()
-        
+
     def get_job_details(self, job_id: str) -> JobDetails:
         """Get detailed status information for a specific job.
 
@@ -241,5 +251,6 @@ class MistralOCRClient:
             document_identifier: Document name or UUID to download results for
             destination: The directory to download results to. If None, uses XDG_DATA_HOME
         """
-        return self.result_manager.download_document_results(document_identifier, destination, self.job_manager)
-
+        return self.result_manager.download_document_results(
+            document_identifier, destination, self.job_manager
+        )

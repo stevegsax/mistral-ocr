@@ -56,7 +56,9 @@ class FileCollector:
                 raise FileNotFoundError(error_msg)
 
             if current_path.is_dir():
-                directory_files = self._collect_from_directory(current_path, process_directories_recursively)
+                directory_files = self._collect_from_directory(
+                    current_path, process_directories_recursively
+                )
                 all_valid_files.extend(directory_files)
             elif current_path.is_file():
                 self._validate_file_type(current_path)
@@ -93,9 +95,7 @@ class FileCollector:
         # Get all files and filter them using utility functions
         all_files = [path for path in file_iterator if path.is_file()]
         valid_files = FileTypeUtils.filter_supported_files(
-            all_files, 
-            self.SUPPORTED_FILE_EXTENSIONS, 
-            include_hidden=False
+            all_files, self.SUPPORTED_FILE_EXTENSIONS, include_hidden=False
         )
 
         self.logger.info(f"Found {len(valid_files)} supported files in {directory}")

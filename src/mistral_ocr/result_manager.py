@@ -8,7 +8,12 @@ import structlog
 
 from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
 from .database import Database
-from .exceptions import JobNotCompletedError, ResultDownloadError, ResultNotAvailableError, RetryableError
+from .exceptions import (
+    JobNotCompletedError,
+    ResultDownloadError,
+    ResultNotAvailableError,
+    RetryableError,
+)
 from .models import OCRResult
 from .parsing import OCRResultParser
 from .paths import XDGPaths

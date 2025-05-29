@@ -8,23 +8,24 @@ from pydantic.dataclasses import dataclass
 
 class DictAccessMixin:
     """Mixin to provide dictionary-like access for backward compatibility."""
-    
+
     def __getitem__(self, key: str) -> Any:
         """Allow dictionary-style attribute access."""
         return getattr(self, key)
-    
+
     def __setitem__(self, key: str, value: Any) -> None:
         """Allow dictionary-style attribute setting."""
         setattr(self, key, value)
-    
+
     def get(self, key: str, default: Any = None) -> Any:
         """Get attribute with default value like dict.get()."""
         return getattr(self, key, default)
 
 
-@dataclass(config=ConfigDict(extra='forbid', validate_assignment=True))
+@dataclass(config=ConfigDict(extra="forbid", validate_assignment=True))
 class JobInfo(DictAccessMixin):
     """Basic job information for job listings."""
+
     id: str
     status: str
     submitted: str
@@ -38,9 +39,10 @@ class JobInfo(DictAccessMixin):
     last_api_refresh: Optional[str] = None
 
 
-@dataclass(config=ConfigDict(extra='forbid'))
+@dataclass(config=ConfigDict(extra="forbid"))
 class JobDetails(DictAccessMixin):
     """Detailed job information including metadata."""
+
     id: str
     status: str
     submitted: str
@@ -60,18 +62,20 @@ class JobDetails(DictAccessMixin):
     metadata: Optional[Dict[str, Any]] = None
 
 
-@dataclass(config=ConfigDict(extra='forbid'))
+@dataclass(config=ConfigDict(extra="forbid"))
 class DocumentInfo:
     """Document information from database."""
+
     uuid: str
     name: str
     created_at: str
     downloaded: bool = False
 
 
-@dataclass(config=ConfigDict(extra='forbid'))
+@dataclass(config=ConfigDict(extra="forbid"))
 class PageInfo:
     """Page information for file tracking."""
+
     id: str
     file_path: str
     document_uuid: str
@@ -79,9 +83,10 @@ class PageInfo:
     uploaded_at: str
 
 
-@dataclass(config=ConfigDict(extra='allow'))
+@dataclass(config=ConfigDict(extra="allow"))
 class APIJobResponse:
     """API response structure for job details."""
+
     id: str
     status: str
     refresh_timestamp: str
@@ -94,9 +99,10 @@ class APIJobResponse:
     total_requests: Optional[int] = None
 
 
-@dataclass(config=ConfigDict(extra='forbid'))
+@dataclass(config=ConfigDict(extra="forbid"))
 class FullJobInfo:
     """Complete job information with all API fields for storage."""
+
     # Database fields
     id: str
     status: str
@@ -117,9 +123,10 @@ class FullJobInfo:
     metadata: Optional[Dict[str, Any]] = None
 
 
-@dataclass(config=ConfigDict(extra='allow'))
+@dataclass(config=ConfigDict(extra="allow"))
 class ConfigData:
     """Configuration file structure."""
+
     api_key: Optional[str] = None
     default_model: Optional[str] = None
     download_directory: Optional[str] = None
@@ -127,22 +134,25 @@ class ConfigData:
     max_retries: Optional[str] = None
 
 
-@dataclass(config=ConfigDict(extra='forbid'))
+@dataclass(config=ConfigDict(extra="forbid"))
 class DocumentContent:
     """Document content for batch processing."""
+
     type: str
     image_url: str
 
 
-@dataclass(config=ConfigDict(extra='forbid'))
+@dataclass(config=ConfigDict(extra="forbid"))
 class BatchFileBody:
     """Batch file body content."""
+
     document: DocumentContent
     include_image_base64: bool
 
 
-@dataclass(config=ConfigDict(extra='forbid'))
+@dataclass(config=ConfigDict(extra="forbid"))
 class BatchFileEntry:
     """JSONL batch file entry structure."""
+
     custom_id: str
     body: BatchFileBody

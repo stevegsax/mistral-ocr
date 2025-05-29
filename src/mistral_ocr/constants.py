@@ -100,11 +100,11 @@ JOB_STATUS_RUNNING = "running"
 
 # Job Status Groups
 FINAL_JOB_STATUSES = {
-    JOB_STATUS_SUCCESS, 
-    JOB_STATUS_COMPLETED, 
-    JOB_STATUS_SUCCEEDED, 
-    JOB_STATUS_FAILED, 
-    JOB_STATUS_CANCELLED
+    JOB_STATUS_SUCCESS,
+    JOB_STATUS_COMPLETED,
+    JOB_STATUS_SUCCEEDED,
+    JOB_STATUS_FAILED,
+    JOB_STATUS_CANCELLED,
 }
 """Set of job statuses that indicate the job has finished processing."""
 
@@ -149,3 +149,13 @@ PRAGMA_FOREIGN_KEYS = "PRAGMA foreign_keys = ON"
 # Default Values for Settings
 DEFAULT_DOWNLOAD_DIR_NAME = "downloads"
 """Default subdirectory name for downloaded results."""
+
+# Progress and UI Configuration
+DEFAULT_PROGRESS_ENABLED = True
+"""Default setting for progress bar display."""
+
+DEFAULT_PROGRESS_REFRESH_RATE = 0.5
+"""Default refresh rate for progress displays in Hz."""
+
+DEFAULT_JOB_MONITOR_INTERVAL = 10
+"""Default interval for job status monitoring in seconds."""

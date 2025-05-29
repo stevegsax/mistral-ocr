@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Set API key: `uv run python -m mistral_ocr --config-set-api-key "key"`
 - Set default model: `uv run python -m mistral_ocr --config-set-model "model-name"`
 - Set download directory: `uv run python -m mistral_ocr --config-set-download-dir "/path"`
+- Enable/disable progress: `uv run python -m mistral_ocr --config-set-progress-enabled true/false`
+- Set monitor interval: `uv run python -m mistral_ocr --config-set-monitor-interval 10`
 - Reset to defaults: `uv run python -m mistral_ocr --config reset`
 
 ## Architecture
@@ -45,6 +47,7 @@ This is a Python CLI tool for submitting OCR batches to the Mistral API. The arc
 - **Client Layer**: `MistralOCRClient` for API interactions
 - **Configuration**: `ConfigurationManager` for settings
 - **Database**: Local job tracking and document management
+- **Progress Tracking**: `ProgressManager` for real-time UI updates (Rich library)
 - **Logging**: Structured logging with file output
 
 ### Key Features
@@ -54,6 +57,8 @@ This is a Python CLI tool for submitting OCR batches to the Mistral API. The arc
 - Job status tracking and cancellation
 - Result retrieval and automatic download
 - Configuration management via CLI commands
+- Real-time progress tracking with Rich UI components
+- Live job monitoring with status change notifications
 - Support for PNG, JPEG, and PDF files
 
 ## Development Rules
