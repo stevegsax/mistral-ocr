@@ -26,12 +26,10 @@ AsyncF = TypeVar("AsyncF", bound=Callable[..., Any])
 logger = logging.getLogger(__name__)
 
 
-
-
 class RetryManager:
     """
     Manages retry logic with exponential backoff and jitter.
-    
+
     This class provides configurable retry behavior for operations that may
     fail due to transient errors like network issues or API rate limiting.
     """
@@ -80,8 +78,8 @@ class RetryManager:
         self.non_retryable_exceptions = non_retryable_exceptions or {
             NonRetryableError,
             ValueError,  # Invalid input parameters
-            TypeError,   # Programming errors
-            KeyError,    # Missing required data
+            TypeError,  # Programming errors
+            KeyError,  # Missing required data
         }
 
     def calculate_delay(self, attempt: int, retry_after: Optional[float] = None) -> float:
@@ -100,7 +98,7 @@ class RetryManager:
             base_delay = retry_after
         else:
             # Calculate exponential backoff delay
-            base_delay = self.base_delay * (self.exponential_base ** attempt)
+            base_delay = self.base_delay * (self.exponential_base**attempt)
 
         # Apply jitter to avoid thundering herd
         if self.jitter:
@@ -188,35 +186,35 @@ class RetryManager:
             The last exception if all retries are exhausted
         """
         last_exception = None
-        
+
         for attempt in range(self.max_retries + 1):  # +1 for initial attempt
             try:
                 result = func(*args, **kwargs)
                 if attempt > 0:
                     logger.info(f"Operation succeeded after {attempt} retries")
                 return result
-                
+
             except Exception as e:
                 last_exception = e
-                
+
                 # Don't retry if this is the last attempt
                 if attempt >= self.max_retries:
                     break
-                    
+
                 # Check if this exception is retryable
                 if not self.is_retryable(e):
                     logger.debug(f"Exception not retryable: {type(e).__name__}: {e}")
                     break
-                    
+
                 # Calculate delay and wait
                 retry_after = self.extract_retry_after(e)
                 delay = self.calculate_delay(attempt, retry_after)
-                
+
                 logger.warning(
                     f"Attempt {attempt + 1}/{self.max_retries + 1} failed: "
                     f"{type(e).__name__}: {e}. Retrying in {delay:.2f} seconds..."
                 )
-                
+
                 time.sleep(delay)
 
         # All retries exhausted
@@ -247,35 +245,35 @@ class RetryManager:
             The last exception if all retries are exhausted
         """
         last_exception = None
-        
+
         for attempt in range(self.max_retries + 1):  # +1 for initial attempt
             try:
                 result = await func(*args, **kwargs)
                 if attempt > 0:
                     logger.info(f"Async operation succeeded after {attempt} retries")
                 return result
-                
+
             except Exception as e:
                 last_exception = e
-                
+
                 # Don't retry if this is the last attempt
                 if attempt >= self.max_retries:
                     break
-                    
+
                 # Check if this exception is retryable
                 if not self.is_retryable(e):
                     logger.debug(f"Exception not retryable: {type(e).__name__}: {e}")
                     break
-                    
+
                 # Calculate delay and wait
                 retry_after = self.extract_retry_after(e)
                 delay = self.calculate_delay(attempt, retry_after)
-                
+
                 logger.warning(
                     f"Async attempt {attempt + 1}/{self.max_retries + 1} failed: "
                     f"{type(e).__name__}: {e}. Retrying in {delay:.2f} seconds..."
                 )
-                
+
                 await asyncio.sleep(delay)
 
         # All retries exhausted
@@ -324,7 +322,9 @@ def with_retry(
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return retry_manager.execute_with_retry(func, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -366,7 +366,9 @@ def with_retry_async(
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             return await retry_manager.execute_with_retry_async(func, *args, **kwargs)
+
         return wrapper
+
     return decorator
 
 

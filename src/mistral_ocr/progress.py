@@ -35,7 +35,7 @@ from .constants import FINAL_JOB_STATUSES
 class ProgressManager:
     """
     Central manager for all progress tracking in mistral-ocr.
-    
+
     Provides progress bars, real-time monitoring, and status displays
     for long-running operations like file processing and API calls.
     """
@@ -164,9 +164,7 @@ class SubmissionProgressTracker:
 
     def track_upload(self, progress: Progress, filename: str, file_size: int) -> TaskID:
         """Track individual file upload progress."""
-        return progress.add_task(
-            f"Uploading {filename}...", total=file_size
-        )
+        return progress.add_task(f"Uploading {filename}...", total=file_size)
 
     def track_job_creation(self, progress: Progress, batch_count: int) -> TaskID:
         """Track batch job creation progress."""
@@ -261,15 +259,11 @@ class DownloadProgressContext:
         self.download_tasks: Dict[str, TaskID] = {}
 
         # Overall progress task
-        self.overall_task = progress.add_task(
-            f"Downloading {job_count} jobs...", total=job_count
-        )
+        self.overall_task = progress.add_task(f"Downloading {job_count} jobs...", total=job_count)
 
     def start_download(self, job_id: str, file_size: Optional[int] = None) -> TaskID:
         """Start tracking a download."""
-        task_id = self.progress.add_task(
-            f"Downloading {job_id[:8]}...", total=file_size
-        )
+        task_id = self.progress.add_task(f"Downloading {job_id[:8]}...", total=file_size)
         self.download_tasks[job_id] = task_id
         return task_id
 
@@ -356,11 +350,7 @@ class LiveJobMonitor:
                     self._detect_status_changes(current_statuses)
 
                     # Update display
-                    live.update(
-                        self._create_status_table(
-                            job_ids, current_statuses, start_time
-                        )
-                    )
+                    live.update(self._create_status_table(job_ids, current_statuses, start_time))
 
                     # Check exit conditions
                     if auto_exit and self._all_jobs_complete(current_statuses):
@@ -396,9 +386,7 @@ class LiveJobMonitor:
 
         self._last_statuses = current_statuses.copy()
 
-    def _announce_status_change(
-        self, job_id: str, old_status: str, new_status: str
-    ) -> None:
+    def _announce_status_change(self, job_id: str, old_status: str, new_status: str) -> None:
         """Announce a status change."""
         status_emoji = {
             "completed": "✅",
@@ -409,15 +397,11 @@ class LiveJobMonitor:
         }
 
         emoji = status_emoji.get(new_status.lower(), "📋")
-        self.console.print(
-            f"{emoji} {job_id[:8]}... changed from {old_status} to {new_status}"
-        )
+        self.console.print(f"{emoji} {job_id[:8]}... changed from {old_status} to {new_status}")
 
     def _all_jobs_complete(self, statuses: Dict[str, str]) -> bool:
         """Check if all jobs have completed."""
-        return all(
-            status.upper() in FINAL_JOB_STATUSES for status in statuses.values()
-        )
+        return all(status.upper() in FINAL_JOB_STATUSES for status in statuses.values())
 
     def _create_status_table(
         self,
@@ -452,9 +436,7 @@ class LiveJobMonitor:
 
         # Add summary footer
         if statuses:
-            completed = sum(
-                1 for s in statuses.values() if s.upper() in FINAL_JOB_STATUSES
-            )
+            completed = sum(1 for s in statuses.values() if s.upper() in FINAL_JOB_STATUSES)
             total = len(statuses)
             footer_text = f"Progress: {completed}/{total} jobs completed"
             if start_time:

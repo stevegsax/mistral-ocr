@@ -1,9 +1,11 @@
 import argparse
 import pathlib
 import sys
+import time
 from typing import TYPE_CHECKING, Optional
 
 from mistral_ocr._version import __version__
+from mistral_ocr.audit import AuditEventType, get_audit_logger
 from mistral_ocr.constants import (
     API_REFRESH_COLUMN_WIDTH,
     JOB_ID_COLUMN_WIDTH,
@@ -298,6 +300,10 @@ def main() -> None:
     Raises:
         SystemExit: On error conditions or missing configuration
     """
+    # Initialize audit logging
+    audit_logger = get_audit_logger("cli")
+    start_time = time.time()
+
     parser = argparse.ArgumentParser(
         prog="mistral-ocr", description="Submit OCR batches to the Mistral API"
     )
@@ -344,63 +350,225 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Import here to avoid circular imports
-    from mistral_ocr.client import MistralOCRClient
-    from mistral_ocr.settings import get_settings
-
-    # Initialize settings
-    settings = get_settings()
-
-    # Handle configuration commands first (these don't require API key)
-    if args.config:
-        handle_config_command(args, settings)
-        return
+    # Determine command for audit logging
+    command = None
+    if args.submit:
+        command = f"submit:{args.submit}"
+    elif args.check_job:
+        command = f"check-job:{args.check_job}"
+    elif args.query_document:
+        command = f"query-document:{args.query_document}"
+    elif args.cancel_job:
+        command = f"cancel-job:{args.cancel_job}"
+    elif args.list_jobs:
+        command = "list-jobs"
+    elif args.job_status:
+        command = f"job-status:{args.job_status}"
+    elif args.get_results:
+        command = f"get-results:{args.get_results}"
+    elif args.download_results:
+        command = f"download-results:{args.download_results}"
+    elif args.download_document:
+        command = f"download-document:{args.download_document}"
+    elif args.config:
+        command = f"config:{args.config}"
     elif args.config_set_api_key:
-        handle_config_set_api_key_command(args)
-        return
+        command = "config-set-api-key"
     elif args.config_set_model:
-        handle_config_set_model_command(args)
-        return
+        command = "config-set-model"
     elif args.config_set_download_dir:
-        handle_config_set_download_dir_command(args)
-        return
+        command = "config-set-download-dir"
+    else:
+        command = "help"
 
-    # Get API key for non-config commands
-    api_key = settings.get_api_key_optional()
-    if not api_key:
-        print("Error: No API key found. Set MISTRAL_API_KEY environment variable or use config.")
-        sys.exit(1)
-
-    try:
-        client = MistralOCRClient(api_key=api_key, settings=settings)
-    except Exception as e:
-        print(f"Error initializing client: {e}")
-        sys.exit(1)
+    # Log application start
+    audit_logger.audit(
+        AuditEventType.APPLICATION_START,
+        "Started mistral-ocr CLI",
+        operation=command,
+        version=__version__,
+        args=vars(args),
+    )
 
     try:
+        # Import here to avoid circular imports
+        from mistral_ocr.client import MistralOCRClient
+        from mistral_ocr.settings import get_settings
+
+        # Initialize settings
+        settings = get_settings()
+
+        # Handle configuration commands first (these don't require API key)
+        if args.config:
+            audit_logger.audit(
+                AuditEventType.CONFIG_CHANGE,
+                f"Configuration command: {args.config}",
+                operation=f"config_{args.config}",
+            )
+            handle_config_command(args, settings)
+            return
+        elif args.config_set_api_key:
+            audit_logger.audit(
+                AuditEventType.CONFIG_CHANGE,
+                "Setting API key via CLI",
+                operation="config_set_api_key",
+            )
+            handle_config_set_api_key_command(args)
+            return
+        elif args.config_set_model:
+            audit_logger.audit(
+                AuditEventType.CONFIG_CHANGE,
+                f"Setting default model to: {args.config_set_model}",
+                operation="config_set_model",
+                model=args.config_set_model,
+            )
+            handle_config_set_model_command(args)
+            return
+        elif args.config_set_download_dir:
+            audit_logger.audit(
+                AuditEventType.CONFIG_CHANGE,
+                f"Setting download directory to: {args.config_set_download_dir}",
+                operation="config_set_download_dir",
+                download_directory=args.config_set_download_dir,
+            )
+            handle_config_set_download_dir_command(args)
+            return
+
+        # Get API key for non-config commands
+        api_key = settings.get_api_key_optional()
+        if not api_key:
+            audit_logger.audit(
+                AuditEventType.AUTHENTICATION,
+                "No API key found",
+                level="warning",
+                outcome="failure",
+            )
+            print(
+                "Error: No API key found. Set MISTRAL_API_KEY environment variable or use config."
+            )
+            sys.exit(1)
+
+        try:
+            client = MistralOCRClient(api_key=api_key, settings=settings)
+            audit_logger.audit(
+                AuditEventType.AUTHENTICATION, "Client initialized successfully", outcome="success"
+            )
+        except Exception as e:
+            audit_logger.audit(
+                AuditEventType.AUTHENTICATION,
+                f"Client initialization failed: {str(e)}",
+                level="error",
+                outcome="failure",
+                error_message=str(e),
+            )
+            print(f"Error initializing client: {e}")
+            sys.exit(1)
+
         # Route to appropriate command handler
         if args.submit:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Document submission requested",
+                operation="submit",
+                file_path=args.submit,
+                recursive=args.recursive,
+                document_name=args.document_name,
+                document_uuid=args.document_uuid,
+                model=args.model,
+            )
             handle_submit_command(args, client, settings)
         elif args.check_job:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Job status check requested",
+                operation="check_job",
+                job_id=args.check_job,
+            )
             handle_job_status_command(args, client)
         elif args.query_document:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Document query requested",
+                operation="query_document",
+                document_name=args.query_document,
+            )
             handle_document_query_command(args, client)
         elif args.cancel_job:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Job cancellation requested",
+                operation="cancel_job",
+                job_id=args.cancel_job,
+            )
             handle_cancel_job_command(args, client)
         elif args.list_jobs:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND, "Jobs listing requested", operation="list_jobs"
+            )
             handle_list_jobs_command(args, client)
         elif args.job_status:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Detailed job status requested",
+                operation="job_status",
+                job_id=args.job_status,
+            )
             handle_job_details_command(args, client)
         elif args.get_results:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Results retrieval requested",
+                operation="get_results",
+                job_id=args.get_results,
+            )
             handle_get_results_command(args, client)
         elif args.download_results:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Results download requested",
+                operation="download_results",
+                job_id=args.download_results,
+                download_to=args.download_to,
+            )
             handle_download_results_command(args, client)
         elif args.download_document:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Document download requested",
+                operation="download_document",
+                document_name=args.download_document,
+                download_to=args.download_to,
+            )
             handle_download_document_command(args, client)
         else:
+            audit_logger.audit(
+                AuditEventType.CLI_COMMAND,
+                "Help requested - no command specified",
+                operation="help",
+            )
             parser.print_help()
 
+        # Log successful completion
+        duration = time.time() - start_time
+        audit_logger.audit(
+            AuditEventType.APPLICATION_END,
+            "CLI command completed successfully",
+            operation=command,
+            outcome="success",
+            duration_seconds=round(duration, 3),
+        )
+
     except Exception as e:
+        duration = time.time() - start_time
+        audit_logger.audit(
+            AuditEventType.APPLICATION_END,
+            f"CLI command failed: {str(e)}",
+            level="error",
+            operation=command,
+            outcome="failure",
+            duration_seconds=round(duration, 3),
+            error_message=str(e),
+        )
         print(f"Error: {e}")
         sys.exit(1)
 

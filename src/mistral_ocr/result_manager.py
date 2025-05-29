@@ -69,7 +69,7 @@ class ResultManager:
         error_msg = str(exception).lower()
         transient_patterns = [
             "connection",
-            "timeout", 
+            "timeout",
             "network",
             "temporary",
             "503",  # Service unavailable
@@ -82,13 +82,13 @@ class ResultManager:
     @with_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def _api_get_job_details(self, job_id: str):
         """Get job details from API with retry logic.
-        
+
         Args:
             job_id: The job ID to get details for
-            
+
         Returns:
             Job response object from API
-            
+
         Raises:
             RetryableError: For transient errors that should be retried
             Exception: For permanent errors that should not be retried
@@ -104,13 +104,13 @@ class ResultManager:
     @with_retry(max_retries=3, base_delay=2.0, max_delay=60.0)
     def _api_download_file(self, file_id: str):
         """Download file from API with retry logic.
-        
+
         Args:
             file_id: The file ID to download
-            
+
         Returns:
             File content response from API
-            
+
         Raises:
             RetryableError: For transient errors that should be retried
             Exception: For permanent errors that should not be retried

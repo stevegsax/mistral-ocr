@@ -59,15 +59,15 @@ class BatchJobManager:
     @with_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def _api_get_job_status(self, job_id: str):
         """Get job status from API with retry logic.
-        
+
         This method handles the actual API call with automatic retry on transient failures.
-        
+
         Args:
             job_id: The job ID to check
-            
+
         Returns:
             Batch job response object from API
-            
+
         Raises:
             RetryableError: For transient errors that should be retried
             Exception: For permanent errors that should not be retried
@@ -88,7 +88,7 @@ class BatchJobManager:
         error_msg = str(exception).lower()
         transient_patterns = [
             "connection",
-            "timeout", 
+            "timeout",
             "network",
             "temporary",
             "503",  # Service unavailable
@@ -96,19 +96,19 @@ class BatchJobManager:
             "504",  # Gateway timeout
             "429",  # Rate limited
         ]
-        
+
         return any(pattern in error_msg for pattern in transient_patterns)
 
     @with_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def _api_cancel_job(self, job_id: str):
         """Cancel job via API with retry logic.
-        
+
         Args:
             job_id: The job ID to cancel
-            
+
         Returns:
             Cancelled job response object from API
-            
+
         Raises:
             RetryableError: For transient errors that should be retried
             Exception: For permanent errors that should not be retried
@@ -124,10 +124,10 @@ class BatchJobManager:
     @with_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def _api_list_jobs(self):
         """List all jobs via API with retry logic.
-        
+
         Returns:
             Jobs list response object from API
-            
+
         Raises:
             RetryableError: For transient errors that should be retried
             Exception: For permanent errors that should not be retried

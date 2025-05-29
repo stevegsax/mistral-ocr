@@ -184,7 +184,7 @@ def run_async_in_sync_context(async_func: Callable[..., Awaitable[Any]], *args, 
     """
     try:
         # Try to get existing event loop
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
         # If we're in an async context, we need to use a new thread
         import concurrent.futures
 

@@ -33,22 +33,47 @@ class MistralOCRClient:
         """
         self.settings = settings or get_settings()
 
+        # Initialize logging first for audit trails
+        self._initialize_logging()
+
         # Get API key from parameter, settings, or environment
         if api_key:
             self.api_key = api_key
+            self.security_logger.authentication_event(
+                "API key provided via parameter", outcome="success"
+            )
         else:
             self.api_key = self.settings.get_api_key()
+            if self.api_key:
+                self.security_logger.authentication_event(
+                    "API key loaded from configuration/environment", outcome="success"
+                )
+            else:
+                self.security_logger.authentication_event("No API key found", outcome="failure")
 
         # Use mock mode for testing
         self.mock_mode = self.api_key == MOCK_API_KEY or self.settings.is_mock_mode()
 
-        if not self.mock_mode:
-            self.client = Mistral(api_key=self.api_key)
-        else:
+        if self.mock_mode:
             self.client = None  # Mock client
+            self.security_logger.authentication_event(
+                "Mock mode enabled for testing", outcome="success"
+            )
+        else:
+            try:
+                self.client = Mistral(api_key=self.api_key)
+                self.security_logger.authentication_event(
+                    "Mistral client initialized successfully", outcome="success"
+                )
+            except Exception as e:
+                self.security_logger.authentication_event(
+                    f"Mistral client initialization failed: {str(e)}",
+                    outcome="failure",
+                    validation_details={"error": str(e)},
+                )
+                raise
 
-        # Initialize logging, database, and utilities
-        self._initialize_logging()
+        # Initialize database and utilities
         self._initialize_database()
         self._initialize_utilities()
 
@@ -57,11 +82,14 @@ class MistralOCRClient:
 
     def _initialize_logging(self) -> None:
         """Initialize application logging."""
+        from mistral_ocr.audit import get_audit_logger, get_security_logger
         from mistral_ocr.logging import get_logger, setup_logging
 
         log_directory = self.settings.state_directory
         self.log_file = setup_logging(log_directory)
         self.logger = get_logger(__name__)
+        self.audit_logger = get_audit_logger("client")
+        self.security_logger = get_security_logger("client")
 
     def _initialize_database(self) -> None:
         """Initialize database connection."""

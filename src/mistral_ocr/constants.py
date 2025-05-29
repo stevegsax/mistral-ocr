@@ -70,6 +70,18 @@ MOCK_MODE_ENV_VAR = "MISTRAL_OCR_MOCK_MODE"
 LOG_FILE_NAME = "mistral.log"
 """Name of the application log file."""
 
+AUDIT_LOG_FILE_NAME = "audit.log"
+"""Name of the audit trail log file."""
+
+SECURITY_LOG_FILE_NAME = "security.log"
+"""Name of the security events log file."""
+
+PERFORMANCE_LOG_FILE_NAME = "performance.log"
+"""Name of the performance metrics log file."""
+
+API_LOG_FILE_NAME = "api.log"
+"""Name of the API request/response log file."""
+
 DATABASE_FILE_NAME = "mistral_ocr.db"
 """Name of the SQLite database file."""
 
@@ -159,3 +171,16 @@ DEFAULT_PROGRESS_REFRESH_RATE = 0.5
 
 DEFAULT_JOB_MONITOR_INTERVAL = 10
 """Default interval for job status monitoring in seconds."""
+
+# Logging Configuration
+DEFAULT_LOG_LEVEL = "INFO"
+"""Default logging level for the application."""
+
+DEFAULT_LOG_MAX_BYTES = 50 * 1024 * 1024  # 50MB
+"""Default maximum size per log file before rotation."""
+
+DEFAULT_LOG_BACKUP_COUNT = 5
+"""Default number of backup log files to keep."""
+
+LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
+"""Valid logging levels."""

@@ -108,7 +108,7 @@ class BatchSubmissionManager:
         error_msg = str(exception).lower()
         transient_patterns = [
             "connection",
-            "timeout", 
+            "timeout",
             "network",
             "temporary",
             "503",  # Service unavailable
@@ -121,14 +121,14 @@ class BatchSubmissionManager:
     @with_retry(max_retries=3, base_delay=2.0, max_delay=60.0)
     def _api_upload_file(self, file_path: pathlib.Path, purpose: str):
         """Upload file to API with retry logic.
-        
+
         Args:
             file_path: Path to file to upload
             purpose: Purpose for the upload
-            
+
         Returns:
             Upload response object from API
-            
+
         Raises:
             RetryableError: For transient errors that should be retried
             Exception: For permanent errors that should not be retried
@@ -150,16 +150,16 @@ class BatchSubmissionManager:
         self, input_file_ids: List[str], endpoint: str, model: str, metadata: dict
     ):
         """Create batch job via API with retry logic.
-        
+
         Args:
             input_file_ids: List of uploaded file IDs
             endpoint: API endpoint for processing
             model: Model to use for processing
             metadata: Additional metadata for the job
-            
+
         Returns:
             Batch job response object from API
-            
+
         Raises:
             RetryableError: For transient errors that should be retried
             Exception: For permanent errors that should not be retried
@@ -178,7 +178,11 @@ class BatchSubmissionManager:
                 raise
 
     def _submit_real_batch(
-        self, batch_files: List[pathlib.Path], document_uuid: str, model: str, progress_ctx: Optional[Any] = None
+        self,
+        batch_files: List[pathlib.Path],
+        document_uuid: str,
+        model: str,
+        progress_ctx: Optional[Any] = None,
     ) -> str:
         """Submit a real batch to the Mistral API.
 
@@ -198,15 +202,15 @@ class BatchSubmissionManager:
         try:
             # Upload the batch file with retry logic and progress tracking
             self.logger.info(f"Uploading batch file: {batch_file_path.name}")
-            
+
             if progress_ctx:
                 # Track upload progress for this batch file
                 file_size = batch_file_path.stat().st_size
                 progress_ctx.start_upload(batch_file_path.name, file_size)
-            
+
             batch_upload = self._api_upload_file(batch_file_path, BATCH_FILE_PURPOSE)
             self.logger.info(f"Batch file uploaded with ID: {batch_upload.id}")
-            
+
             if progress_ctx:
                 # Complete upload tracking
                 progress_ctx.complete_upload(batch_file_path.name)
@@ -363,7 +367,7 @@ class BatchSubmissionManager:
         model: Optional[str] = None,
     ) -> Union[str, List[str]]:
         """Submit documents with progress tracking.
-        
+
         This method provides real-time progress feedback through multiple phases:
         1. File collection and validation
         2. File encoding for API submission
@@ -372,7 +376,7 @@ class BatchSubmissionManager:
         """
         # Create progress tracker with Rich UI components for terminal feedback
         tracker = self.progress_manager.create_submission_progress()
-        
+
         # Collect and validate files with progress
         actual_files = self._collect_files_with_progress(files, recursive, tracker)
 
@@ -383,17 +387,16 @@ class BatchSubmissionManager:
 
         # Create file batches
         batches = self._create_file_batches(actual_files)
-        
+
         ocr_model = model or DEFAULT_OCR_MODEL
 
         # Process batches with progress tracking
         # Uses Rich context manager for automatic progress bar lifecycle management
         job_ids = []
         with tracker.track_submission(len(actual_files), len(batches)) as progress_ctx:
-            
             # Mark file collection phase as complete (files already gathered)
             progress_ctx.complete_collection(len(actual_files))
-            
+
             # Process each batch with progress updates
             # Each batch may contain up to 100 files (Mistral API limitation)
             for batch_idx, batch_files in enumerate(batches, 1):
@@ -403,7 +406,7 @@ class BatchSubmissionManager:
                 job_ids.append(job_id)
                 # Update progress bar as each batch job is created
                 progress_ctx.update_job_creation(batch_idx)
-            
+
             # Mark all job creation as complete
             progress_ctx.complete_job_creation()
 
@@ -436,7 +439,7 @@ class BatchSubmissionManager:
         for i, file_path in enumerate(batch_files, 1):
             # Update encoding progress
             progress_ctx.update_encoding(files_processed + i)
-        
+
         # Mark encoding complete for this batch
         files_processed += len(batch_files)
 
@@ -444,7 +447,7 @@ class BatchSubmissionManager:
         job_id = self._process_single_batch(
             batch_idx, total_batches, batch_files, document_uuid, model, progress_ctx
         )
-        
+
         return job_id
 
     def _log_completion_summary(self, job_ids: List[str]) -> None:
