@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .db_models import Base, Document, Job, Page, Download
 from .exceptions import DatabaseConnectionError
-from .types import APIJobResponse, JobDetails, JobInfo
+from .data_types import APIJobResponse, JobDetails, JobInfo
 from .validation import require_database_connection
 
 
