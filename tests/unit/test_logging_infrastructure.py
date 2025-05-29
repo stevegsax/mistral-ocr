@@ -190,11 +190,22 @@ class TestSetupLogging:
         """Test setup_logging with custom log level."""
         with tempfile.TemporaryDirectory() as temp_dir:
             log_dir = Path(temp_dir) / "logs"
-
-            setup_logging(log_dir, level="DEBUG")
-
-            # Should configure logging at DEBUG level
-            assert logging.getLogger().level == logging.DEBUG
+            
+            # Clear all existing handlers to test logging configuration from scratch
+            root_logger = logging.getLogger()
+            original_level = root_logger.level
+            original_handlers = root_logger.handlers[:]
+            root_logger.handlers.clear()
+            
+            try:
+                setup_logging(log_dir, level="DEBUG")
+                
+                # Should configure logging at DEBUG level
+                assert root_logger.level == logging.DEBUG
+            finally:
+                # Restore original state
+                root_logger.setLevel(original_level)
+                root_logger.handlers[:] = original_handlers
 
     def test_setup_logging_with_custom_rotation_settings(self):
         """Test setup_logging with custom rotation settings."""
@@ -211,17 +222,17 @@ class TestSetupLogging:
             assert main_log.exists()
 
     def test_setup_logging_console_enabled(self):
-        """Test setup_logging with console output enabled."""
+        """Test setup_logging ignores console parameter (file-only by design)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             log_dir = Path(temp_dir) / "logs"
 
             with patch("mistral_ocr.logging.logging.basicConfig") as mock_config:
                 setup_logging(log_dir, enable_console=True)
-
-                # Should configure console handler
+                
+                # Even with console=True, should only configure file handler
                 mock_config.assert_called_once()
                 call_kwargs = mock_config.call_args[1]
-                assert len(call_kwargs["handlers"]) == 2  # File + Console
+                assert len(call_kwargs['handlers']) == 1  # File only (design choice)
 
     def test_setup_logging_console_disabled(self):
         """Test setup_logging with console output disabled."""
@@ -251,34 +262,35 @@ class TestSetupLogging:
             assert "wrapper_class" in call_kwargs
             assert "logger_factory" in call_kwargs
 
-    @patch("sys.stderr.isatty", return_value=True)
-    @patch("mistral_ocr.logging.structlog.configure")
-    def test_setup_logging_console_processors_for_tty(self, mock_configure, mock_isatty):
-        """Test that console processors are used for TTY."""
+    @patch('sys.stderr.isatty', return_value=True)
+    @patch('mistral_ocr.logging.structlog.configure')
+    def test_setup_logging_json_processors_for_file_only(self, mock_configure, mock_isatty):
+        """Test that JSON processors are used for file-only logging."""
         with tempfile.TemporaryDirectory() as temp_dir:
             log_dir = Path(temp_dir) / "logs"
 
             setup_logging(log_dir, enable_console=True)
-
-            # Should use console processors for TTY
+            
+            # Should use JSON processors for file-only output
             mock_configure.assert_called_once()
             call_kwargs = mock_configure.call_args[1]
-            processors = call_kwargs["processors"]
-
-            # Should include ConsoleRenderer
+            processors = call_kwargs['processors']
+            
+            # Should include JSONRenderer (not ConsoleRenderer)
             processor_types = [type(p).__name__ for p in processors]
-            assert "ConsoleRenderer" in processor_types
+            assert 'JSONRenderer' in processor_types
+            assert 'ConsoleRenderer' not in processor_types
 
-    @patch("sys.stderr.isatty", return_value=False)
-    @patch("mistral_ocr.logging.structlog.configure")
-    def test_setup_logging_json_processors_for_non_tty(self, mock_configure, mock_isatty):
-        """Test that JSON processors are used for non-TTY."""
+    @patch('sys.stderr.isatty', return_value=False)
+    @patch('mistral_ocr.logging.structlog.configure')
+    def test_setup_logging_consistent_json_processors(self, mock_configure, mock_isatty):
+        """Test that JSON processors are consistently used regardless of TTY."""
         with tempfile.TemporaryDirectory() as temp_dir:
             log_dir = Path(temp_dir) / "logs"
 
             setup_logging(log_dir, enable_console=True)
-
-            # Should use JSON processors for non-TTY
+            
+            # Should use JSON processors consistently
             mock_configure.assert_called_once()
             call_kwargs = mock_configure.call_args[1]
             processors = call_kwargs["processors"]

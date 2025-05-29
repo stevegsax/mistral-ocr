@@ -26,12 +26,12 @@ class TestProgressManager:
             mock_console.assert_called_once()
 
     def test_progress_manager_disabled(self):
-        """Test ProgressManager when progress is disabled."""
+        """Test ProgressManager when progress is disabled (file-only mode)."""
         with patch("mistral_ocr.progress.Console") as mock_console:
             manager = ProgressManager(enabled=False)
             assert manager.enabled is False
-            assert manager.console is not None
-            mock_console.assert_called_once()
+            assert manager.console is None  # Console is None when disabled
+            mock_console.assert_not_called()  # Console should not be created
 
     def test_progress_manager_with_custom_console(self):
         """Test ProgressManager with custom console."""
