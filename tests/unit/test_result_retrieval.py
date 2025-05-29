@@ -6,6 +6,8 @@ import pytest
 
 from mistral_ocr.client import MistralOCRClient
 from mistral_ocr.exceptions import JobNotCompletedError
+from mistral_ocr.db_models import Download
+from sqlalchemy import select, func
 
 
 @pytest.fixture
@@ -59,3 +61,17 @@ class TestResultRetrieval:
         client.download_results("job123", destination=tmp_path)  # type: ignore
         client.download_results("job123", destination=tmp_path)  # type: ignore
         assert (tmp_path / "job123").exists()
+
+    def test_store_download_record(self, client: MistralOCRClient) -> None:
+        db = client.database
+        db.store_document("doc-1", "Doc")
+        db.store_job("job-1", "doc-1", "completed")
+        db.store_download(
+            text_path="/tmp/text.txt",
+            markdown_path="/tmp/text.md",
+            document_uuid="doc-1",
+            job_id="job-1",
+            document_order=0,
+        )
+        count = db.session.execute(select(func.count(Download.id))).scalar_one()
+        assert count == 1

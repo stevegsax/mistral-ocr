@@ -7,7 +7,7 @@ from typing import Any, List, Optional, Tuple
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from .db_models import Base, Document, Job, Page
+from .db_models import Base, Document, Job, Page, Download
 from .exceptions import DatabaseConnectionError
 from .types import APIJobResponse, JobDetails, JobInfo
 from .validation import require_database_connection
@@ -38,7 +38,7 @@ class Database:
         """Initialize the database schema."""
         # Create all tables using SQLAlchemy
         Base.metadata.create_all(self.engine)
-        
+
         # Handle schema migrations for existing databases
         self._migrate_schema()
 
@@ -114,7 +114,7 @@ class Database:
             if row and len(row) == 1:
                 return row[0]
             return row
-        
+
         return None
 
     def store_document(self, uuid: str, name: str) -> None:
@@ -129,7 +129,7 @@ class Database:
 
         # Check if document already exists
         existing_doc = self.session.get(Document, uuid)
-        
+
         if existing_doc:
             # Update name if document already exists (but preserve downloaded status)
             existing_doc.name = name
@@ -137,7 +137,7 @@ class Database:
             # Create new document
             new_doc = Document(uuid=uuid, name=name, downloaded=False)
             self.session.add(new_doc)
-        
+
         self.session.commit()
 
     @require_database_connection
@@ -168,7 +168,7 @@ class Database:
 
         # Check if job already exists
         existing_job = self.session.get(Job, job_id)
-        
+
         if existing_job:
             # Update existing job
             existing_job.status = status
@@ -176,13 +176,10 @@ class Database:
         else:
             # Create new job
             new_job = Job(
-                job_id=job_id,
-                document_uuid=document_uuid, 
-                status=status,
-                file_count=file_count
+                job_id=job_id, document_uuid=document_uuid, status=status, file_count=file_count
             )
             self.session.add(new_job)
-        
+
         self.session.commit()
 
     def store_page(self, file_path: str, document_uuid: str, file_id: str) -> None:
@@ -196,12 +193,30 @@ class Database:
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        new_page = Page(
-            file_path=file_path,
-            document_uuid=document_uuid,
-            file_id=file_id
-        )
+        new_page = Page(file_path=file_path, document_uuid=document_uuid, file_id=file_id)
         self.session.add(new_page)
+        self.session.commit()
+
+    def store_download(
+        self,
+        text_path: str,
+        markdown_path: str,
+        document_uuid: str,
+        job_id: str,
+        document_order: int,
+    ) -> None:
+        """Store downloaded file paths."""
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
+
+        download = Download(
+            text_path=text_path,
+            markdown_path=markdown_path,
+            document_uuid=document_uuid,
+            job_id=job_id,
+            document_order=document_order,
+        )
+        self.session.add(download)
         self.session.commit()
 
     def update_job_status(self, job_id: str, status: str) -> None:
@@ -216,11 +231,12 @@ class Database:
 
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
-            
+
         job = self.session.get(Job, job_id)
         if job:
             job.status = status
             from datetime import datetime
+
             job.updated_at = datetime.now()
             self.session.commit()
 
@@ -237,11 +253,12 @@ class Database:
 
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
-            
+
         job = self.session.get(Job, job_id)
         if job:
             job.status = status
             from datetime import datetime
+
             job.updated_at = datetime.now()
             job.last_api_refresh = datetime.now()
             job.api_response_json = api_response_json
@@ -270,7 +287,7 @@ class Database:
 
         # Check if job already exists
         existing_job = self.session.get(Job, job_id)
-        
+
         if existing_job:
             # Update existing job
             existing_job.document_uuid = document_uuid
@@ -285,6 +302,7 @@ class Database:
             existing_job.metadata_json = metadata_json
             existing_job.api_response_json = api_response_json
             from datetime import datetime
+
             existing_job.last_api_refresh = datetime.now()
         else:
             # Create new job
@@ -300,12 +318,13 @@ class Database:
                 output_file=api_data.get("output_file"),
                 errors_json=errors_json,
                 metadata_json=metadata_json,
-                api_response_json=api_response_json
+                api_response_json=api_response_json,
             )
             from datetime import datetime
+
             new_job.last_api_refresh = datetime.now()
             self.session.add(new_job)
-        
+
         self.session.commit()
 
     def update_job_full_api_data(self, job_id: str, api_data: APIJobResponse) -> None:
@@ -328,11 +347,12 @@ class Database:
 
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
-            
+
         job = self.session.get(Job, job_id)
         if job:
             job.status = api_data.get("status")
             from datetime import datetime
+
             job.updated_at = datetime.now()
             job.api_created_at = api_data.get("created_at")
             job.api_completed_at = api_data.get("completed_at")
@@ -378,11 +398,7 @@ class Database:
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        stmt = (
-            select(Job.job_id)
-            .join(Document)
-            .where(Document.name == name)
-        )
+        stmt = select(Job.job_id).join(Document).where(Document.name == name)
         result = self.session.execute(stmt)
         return [row[0] for row in result.fetchall()]
 
@@ -398,11 +414,7 @@ class Database:
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        stmt = (
-            select(Document.uuid, Document.name)
-            .join(Job)
-            .where(Job.job_id == job_id)
-        )
+        stmt = select(Document.uuid, Document.name).join(Job).where(Job.job_id == job_id)
         result = self.session.execute(stmt).first()
         return (result[0], result[1]) if result else None
 
@@ -425,11 +437,7 @@ class Database:
 
         # If no results by UUID, try by name
         if not results:
-            stmt = (
-                select(Job.job_id)
-                .join(Document)
-                .where(Document.name == identifier)
-            )
+            stmt = select(Job.job_id).join(Document).where(Document.name == identifier)
             result = self.session.execute(stmt)
             results = [row[0] for row in result.fetchall()]
 
@@ -446,22 +454,19 @@ class Database:
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
-        stmt = (
-            select(
-                Job.job_id,
-                Job.status,
-                Job.created_at,
-                Job.api_created_at,
-                Job.api_completed_at,
-                Job.total_requests,
-                Job.input_files_json,
-                Job.output_file,
-                Job.errors_json,
-                Job.metadata_json,
-                Job.last_api_refresh,
-            )
-            .order_by(Job.created_at.desc())
-        )
+        stmt = select(
+            Job.job_id,
+            Job.status,
+            Job.created_at,
+            Job.api_created_at,
+            Job.api_completed_at,
+            Job.total_requests,
+            Job.input_files_json,
+            Job.output_file,
+            Job.errors_json,
+            Job.metadata_json,
+            Job.last_api_refresh,
+        ).order_by(Job.created_at.desc())
         result = self.session.execute(stmt)
 
         jobs: List[JobInfo] = []
@@ -535,7 +540,7 @@ class Database:
             .where(Job.job_id == job_id)
         )
         result = self.session.execute(stmt).first()
-        
+
         if not result:
             return None
 

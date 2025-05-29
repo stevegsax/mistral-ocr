@@ -28,6 +28,7 @@ class Document(Base):
     # Relationships
     jobs: Mapped[list["Job"]] = relationship("Job", back_populates="document")
     pages: Mapped[list["Page"]] = relationship("Page", back_populates="document")
+    downloads: Mapped[list["Download"]] = relationship("Download", back_populates="document")
 
 
 class Job(Base):
@@ -36,9 +37,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     job_id: Mapped[str] = mapped_column(String, primary_key=True)
-    document_uuid: Mapped[str] = mapped_column(
-        String, ForeignKey("documents.uuid"), nullable=False
-    )
+    document_uuid: Mapped[str] = mapped_column(String, ForeignKey("documents.uuid"), nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
     file_count: Mapped[Optional[int]] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
@@ -59,6 +58,7 @@ class Job(Base):
 
     # Relationships
     document: Mapped[Document] = relationship("Document", back_populates="jobs")
+    downloads: Mapped[list["Download"]] = relationship("Download", back_populates="job")
 
 
 class Page(Base):
@@ -68,9 +68,7 @@ class Page(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     file_path: Mapped[str] = mapped_column(String, nullable=False)
-    document_uuid: Mapped[str] = mapped_column(
-        String, ForeignKey("documents.uuid"), nullable=False
-    )
+    document_uuid: Mapped[str] = mapped_column(String, ForeignKey("documents.uuid"), nullable=False)
     file_id: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.current_timestamp()
@@ -78,3 +76,23 @@ class Page(Base):
 
     # Relationships
     document: Mapped[Document] = relationship("Document", back_populates="pages")
+
+
+class Download(Base):
+    """Downloaded file record."""
+
+    __tablename__ = "downloads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_uuid: Mapped[str] = mapped_column(String, ForeignKey("documents.uuid"), nullable=False)
+    job_id: Mapped[str] = mapped_column(String, ForeignKey("jobs.job_id"), nullable=False)
+    document_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    text_path: Mapped[str] = mapped_column(String, nullable=False)
+    markdown_path: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.current_timestamp()
+    )
+
+    # Relationships
+    document: Mapped[Document] = relationship("Document", back_populates="downloads")
+    job: Mapped[Job] = relationship("Job", back_populates="downloads")
