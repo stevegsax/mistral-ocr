@@ -7,11 +7,25 @@ from .file_operations import (
     FileTypeUtils,
     TempFileUtils,
 )
+from .retry_manager import (
+    NonRetryableError,
+    RetryableError,
+    RetryManager,
+    create_retry_manager,
+    with_retry,
+    with_retry_async,
+)
 
 __all__ = [
     "FileSystemUtils",
     "FileIOUtils", 
     "FileEncodingUtils",
     "FileTypeUtils",
-    "TempFileUtils"
+    "TempFileUtils",
+    "RetryManager",
+    "RetryableError",
+    "NonRetryableError",
+    "with_retry",
+    "with_retry_async",
+    "create_retry_manager",
 ]

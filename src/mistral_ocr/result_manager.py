@@ -8,11 +8,12 @@ import structlog
 
 from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
 from .database import Database
-from .exceptions import JobNotCompletedError, ResultDownloadError, ResultNotAvailableError
+from .exceptions import JobNotCompletedError, ResultDownloadError, ResultNotAvailableError, RetryableError
 from .models import OCRResult
 from .parsing import OCRResultParser
 from .paths import XDGPaths
 from .utils.file_operations import FileIOUtils, FileSystemUtils
+from .utils.retry_manager import with_retry
 
 if TYPE_CHECKING:
     from mistralai import Mistral
@@ -22,21 +23,21 @@ if TYPE_CHECKING:
 
 class ResultManager:
     """Manages OCR result retrieval and downloading."""
-    
+
     # Mock state counters for testing
     _mock_get_results_call_count = 0
     _mock_download_results_call_count = 0
-    
+
     def __init__(
-        self, 
-        database: Database, 
-        api_client: Optional['Mistral'], 
-        result_parser: OCRResultParser, 
-        logger: structlog.BoundLogger, 
-        mock_mode: bool = False
+        self,
+        database: Database,
+        api_client: Optional["Mistral"],
+        result_parser: OCRResultParser,
+        logger: structlog.BoundLogger,
+        mock_mode: bool = False,
     ) -> None:
         """Initialize the result manager.
-        
+
         Args:
             database: Database instance for job storage
             api_client: Mistral API client instance
@@ -57,11 +58,68 @@ class ResultManager:
         if self._concurrent_processor is None:
             self._concurrent_processor = ConcurrentJobProcessor(max_concurrent=5)
         return self._concurrent_processor
-    
+
+    def _is_transient_error(self, exception: Exception) -> bool:
+        """Determine if an exception represents a transient error that should be retried."""
+        error_msg = str(exception).lower()
+        transient_patterns = [
+            "connection",
+            "timeout", 
+            "network",
+            "temporary",
+            "503",  # Service unavailable
+            "502",  # Bad gateway
+            "504",  # Gateway timeout
+            "429",  # Rate limited
+        ]
+        return any(pattern in error_msg for pattern in transient_patterns)
+
+    @with_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
+    def _api_get_job_details(self, job_id: str):
+        """Get job details from API with retry logic.
+        
+        Args:
+            job_id: The job ID to get details for
+            
+        Returns:
+            Job response object from API
+            
+        Raises:
+            RetryableError: For transient errors that should be retried
+            Exception: For permanent errors that should not be retried
+        """
+        try:
+            return self.client.batch.jobs.get(job_id=job_id)
+        except Exception as e:
+            if self._is_transient_error(e):
+                raise RetryableError(f"Transient error getting job details: {e}", original_error=e)
+            else:
+                raise
+
+    @with_retry(max_retries=3, base_delay=2.0, max_delay=60.0)
+    def _api_download_file(self, file_id: str):
+        """Download file from API with retry logic.
+        
+        Args:
+            file_id: The file ID to download
+            
+        Returns:
+            File content response from API
+            
+        Raises:
+            RetryableError: For transient errors that should be retried
+            Exception: For permanent errors that should not be retried
+        """
+        try:
+            return self.client.files.download(file_id=file_id)
+        except Exception as e:
+            if self._is_transient_error(e):
+                raise RetryableError(f"Transient error downloading file: {e}", original_error=e)
+            else:
+                raise
+
     def get_results(
-        self, 
-        job_id: str, 
-        job_manager: Optional['BatchJobManager'] = None
+        self, job_id: str, job_manager: Optional["BatchJobManager"] = None
     ) -> List[OCRResult]:
         """Retrieve results for a completed job.
 
@@ -92,21 +150,24 @@ class ResultManager:
         else:
             # Fallback: create a temporary job manager (less ideal due to circular import risk)
             from .batch_job_manager import BatchJobManager
-            temp_job_manager = BatchJobManager(self.database, self.client, self.logger, self.mock_mode)
+
+            temp_job_manager = BatchJobManager(
+                self.database, self.client, self.logger, self.mock_mode
+            )
             status = temp_job_manager.check_job_status(job_id)
 
         if status.upper() not in ["SUCCESS", "COMPLETED", "SUCCEEDED"]:
             raise JobNotCompletedError(f"Job {job_id} is not yet completed (status: {status})")
 
         try:
-            batch_job = self.client.batch.jobs.get(job_id=job_id)
+            batch_job = self._api_get_job_details(job_id)
 
             if not batch_job.output_file:
                 self.logger.info(f"Job {job_id} has no output file")
                 return []
 
-            # Download the output file
-            output_response = self.client.files.download(file_id=batch_job.output_file)
+            # Download the output file with retry logic
+            output_response = self._api_download_file(batch_job.output_file)
             output_content = output_response.read().decode("utf-8")
 
             # Parse the results using the result parser
@@ -116,7 +177,7 @@ class ResultManager:
             error_msg = f"Failed to retrieve results for job {job_id}: {str(e)}"
             self.logger.error(error_msg)
             raise ResultDownloadError(error_msg)
-    
+
     def download_results(self, job_id: str, destination: Optional[pathlib.Path] = None) -> None:
         """Download results for a completed job to a destination directory.
 
@@ -173,12 +234,12 @@ class ResultManager:
             # Still create the directory for test compatibility
             FileSystemUtils.ensure_directory_exists(job_dir)
             raise ResultDownloadError(error_msg)
-    
+
     def download_document_results(
-        self, 
-        document_identifier: str, 
-        destination: Optional[pathlib.Path] = None, 
-        job_manager: Optional['BatchJobManager'] = None
+        self,
+        document_identifier: str,
+        destination: Optional[pathlib.Path] = None,
+        job_manager: Optional["BatchJobManager"] = None,
     ) -> None:
         """Download results for all jobs associated with a document.
 
@@ -218,29 +279,39 @@ class ResultManager:
                             status = job_manager.check_job_status(job_id)
                         else:
                             from .batch_job_manager import BatchJobManager
-                            temp_job_manager = BatchJobManager(self.database, self.client, self.logger, self.mock_mode)
+
+                            temp_job_manager = BatchJobManager(
+                                self.database, self.client, self.logger, self.mock_mode
+                            )
                             status = temp_job_manager.check_job_status(job_id)
-                        
+
                         if status.upper() not in ["SUCCESS", "COMPLETED", "SUCCEEDED"]:
-                            return {"job_id": job_id, "status": "failed", "error": f"Not completed (status: {status})"}
+                            return {
+                                "job_id": job_id,
+                                "status": "failed",
+                                "error": f"Not completed (status: {status})",
+                            }
 
                         # Download results for this job
                         self.download_results(job_id, destination)
-                        
+
                         # Count results
                         results = self.get_results(job_id, job_manager)
-                        return {"job_id": job_id, "status": "completed", "result_count": len(results)}
-                        
+                        return {
+                            "job_id": job_id,
+                            "status": "completed",
+                            "result_count": len(results),
+                        }
+
                     except Exception as e:
                         return {"job_id": job_id, "status": "failed", "error": str(e)}
 
                 # Run operations concurrently
                 operations = [functools.partial(process_job, job_id) for job_id in job_ids]
                 results = run_async_in_sync_context(
-                    self.concurrent_processor.run_concurrent_operations,
-                    operations
+                    self.concurrent_processor.run_concurrent_operations, operations
                 )
-                
+
                 # Process results
                 for result in results:
                     if isinstance(result, Exception):
@@ -250,14 +321,20 @@ class ResultManager:
                         total_results += result.get("result_count", 0)
                     else:
                         failed_jobs.append((result["job_id"], result["error"]))
-                        
+
             except Exception as e:
-                self.logger.warning(f"Concurrent processing failed, falling back to sequential: {e}")
+                self.logger.warning(
+                    f"Concurrent processing failed, falling back to sequential: {e}"
+                )
                 # Fall back to sequential processing
-                completed_jobs, failed_jobs, total_results = self._process_jobs_sequential(job_ids, destination, job_manager)
+                completed_jobs, failed_jobs, total_results = self._process_jobs_sequential(
+                    job_ids, destination, job_manager
+                )
         else:
             # Single job - process directly
-            completed_jobs, failed_jobs, total_results = self._process_jobs_sequential(job_ids, destination, job_manager)
+            completed_jobs, failed_jobs, total_results = self._process_jobs_sequential(
+                job_ids, destination, job_manager
+            )
 
         # Log summary for all processing modes
         if completed_jobs:
@@ -271,8 +348,10 @@ class ResultManager:
                 self.logger.warning(f"  {job_id}: {error}")
 
         if not completed_jobs:
-            raise ResultNotAvailableError(f"No results could be downloaded for document {document_identifier}")
-        
+            raise ResultNotAvailableError(
+                f"No results could be downloaded for document {document_identifier}"
+            )
+
         # Mark document as downloaded if we have successfully completed jobs
         if completed_jobs:
             # Get document UUID (document_identifier could be name or UUID)
@@ -282,29 +361,33 @@ class ResultManager:
                 if not document_uuid:
                     # Assume identifier is already a UUID
                     document_uuid = document_identifier
-                
+
                 if document_uuid:
                     self.database.mark_document_downloaded(document_uuid)
                     self.logger.debug(f"Marked document {document_uuid} as downloaded")
             except Exception as e:
                 self.logger.warning(f"Failed to mark document as downloaded: {e}")
 
-    def _process_jobs_sequential(self, job_ids: List[str], destination: pathlib.Path, 
-                               job_manager: Optional['BatchJobManager']) -> tuple:
+    def _process_jobs_sequential(
+        self,
+        job_ids: List[str],
+        destination: pathlib.Path,
+        job_manager: Optional["BatchJobManager"],
+    ) -> tuple:
         """Sequential fallback for job processing.
-        
+
         Args:
             job_ids: List of job IDs to process
             destination: Destination directory
             job_manager: Optional job manager instance
-            
+
         Returns:
             Tuple of (completed_jobs, failed_jobs, total_results)
         """
         completed_jobs = []
         failed_jobs = []
         total_results = 0
-        
+
         for job_id in job_ids:
             try:
                 self.logger.info(f"Processing job {job_id}")
@@ -315,9 +398,12 @@ class ResultManager:
                 else:
                     # Fallback: create a temporary job manager (less ideal due to circular import risk)
                     from .batch_job_manager import BatchJobManager
-                    temp_job_manager = BatchJobManager(self.database, self.client, self.logger, self.mock_mode)
+
+                    temp_job_manager = BatchJobManager(
+                        self.database, self.client, self.logger, self.mock_mode
+                    )
                     status = temp_job_manager.check_job_status(job_id)
-                
+
                 if status.upper() not in ["SUCCESS", "COMPLETED", "SUCCEEDED"]:
                     self.logger.warning(
                         f"Job {job_id} is not completed (status: {status}), skipping"
