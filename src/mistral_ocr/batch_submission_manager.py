@@ -362,8 +362,15 @@ class BatchSubmissionManager:
         document_uuid: Optional[str] = None,
         model: Optional[str] = None,
     ) -> Union[str, List[str]]:
-        """Submit documents with progress tracking."""
-        # Initial file collection with progress
+        """Submit documents with progress tracking.
+        
+        This method provides real-time progress feedback through multiple phases:
+        1. File collection and validation
+        2. File encoding for API submission
+        3. Upload progress for batch files
+        4. Job creation and API response handling
+        """
+        # Create progress tracker with Rich UI components for terminal feedback
         tracker = self.progress_manager.create_submission_progress()
         
         # Collect and validate files with progress
@@ -380,20 +387,24 @@ class BatchSubmissionManager:
         ocr_model = model or DEFAULT_OCR_MODEL
 
         # Process batches with progress tracking
+        # Uses Rich context manager for automatic progress bar lifecycle management
         job_ids = []
         with tracker.track_submission(len(actual_files), len(batches)) as progress_ctx:
             
-            # Complete file collection phase
+            # Mark file collection phase as complete (files already gathered)
             progress_ctx.complete_collection(len(actual_files))
             
-            # Process each batch with progress
+            # Process each batch with progress updates
+            # Each batch may contain up to 100 files (Mistral API limitation)
             for batch_idx, batch_files in enumerate(batches, 1):
                 job_id = self._process_batch_with_progress(
                     batch_idx, len(batches), batch_files, document_uuid, ocr_model, progress_ctx
                 )
                 job_ids.append(job_id)
+                # Update progress bar as each batch job is created
                 progress_ctx.update_job_creation(batch_idx)
             
+            # Mark all job creation as complete
             progress_ctx.complete_job_creation()
 
         # Log completion summary

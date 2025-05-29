@@ -313,9 +313,19 @@ uv run python -m mistral_ocr --help
 - Install the package with `uv pip install -e .`
 - Run the command line program with `uv run python -m mistral_ocr`
 
-## Reference Documentation
+## Developer Documentation
 
-- The OpenAPI specification for the MistralAI API can be found in `reference/plugin-redoc-0.yaml`.
-- The `reference/` directory contains markdown files with more information about the MistralAI API.
-- A working example that calls the MistralAI API can be found in `examples/main.py`.
+### For Contributors
+- **[Contributing Guide](CONTRIBUTING.md)**: Complete developer setup and contribution workflow
+- **[Architecture Documentation](ARCHITECTURE.md)**: Deep dive into system design and patterns
+- **[Process Guide](PROCESS.md)**: Test-driven development methodology
+
+### For API Users
+- **[API Reference](API.md)**: Complete Python API for programmatic usage
+- **[Examples](examples/)**: Working code examples for integration
+
+### Reference Documentation
+- **[Mistral API Spec](reference/plugin-redoc-0.yaml)**: OpenAPI specification for the Mistral API
+- **[API Documentation](reference/)**: Comprehensive Mistral API documentation
+- **[Implementation Example](examples/main.py)**: Working example of direct API usage
 
