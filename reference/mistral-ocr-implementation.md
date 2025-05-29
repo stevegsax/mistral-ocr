@@ -70,17 +70,17 @@ if status == "completed":
 
 ## Command Line Interface
 
-The client can be used from the command line with the following operations:
+The client can be used from the command line with the new subcommand structure:
 
 ```bash
 # Submit files for batch processing
-python -m ocr_test_mistral --submit file1.png file2.jpg
+python -m mistral_ocr submit file1.png file2.jpg
 
 # Check job status
-python -m ocr_test_mistral --check-job <job_id>
+python -m mistral_ocr jobs status <job_id>
 
 # Get job results
-python -m ocr_test_mistral --get-results <job_id>
+python -m mistral_ocr results get <job_id>
 ```
 
 ## Response Structure

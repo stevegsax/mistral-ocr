@@ -23,19 +23,19 @@ export MISTRAL_API_KEY="your-api-key-here"
 **Option 2: Configuration File**
 ```bash
 # Set API key in configuration file
-uv run python -m mistral_ocr --config-set-api-key "your-api-key-here"
+uv run python -m mistral_ocr config set api-key "your-api-key-here"
 
 # View current configuration
-uv run python -m mistral_ocr --config show
+uv run python -m mistral_ocr config show
 
 # Set default model
-uv run python -m mistral_ocr --config-set-model "pixtral-12b-2412"
+uv run python -m mistral_ocr config set model "pixtral-12b-2412"
 
 # Set default download directory
-uv run python -m mistral_ocr --config-set-download-dir "/path/to/downloads"
+uv run python -m mistral_ocr config set download-dir "/path/to/downloads"
 
 # Reset configuration to defaults
-uv run python -m mistral_ocr --config reset
+uv run python -m mistral_ocr config reset
 ```
 
 ## File Submission
@@ -44,39 +44,39 @@ uv run python -m mistral_ocr --config reset
 
 ```bash
 # Submit a single file
-uv run python -m mistral_ocr --submit document.png
+uv run python -m mistral_ocr submit document.png
 
 # Submit a PDF document
-uv run python -m mistral_ocr --submit report.pdf
+uv run python -m mistral_ocr submit report.pdf
 
 # Submit with a custom model
-uv run python -m mistral_ocr --submit image.jpg --model mistral-ocr-latest
+uv run python -m mistral_ocr submit image.jpg --model mistral-ocr-latest
 ```
 
 ### Directory Processing
 
 ```bash
 # Submit all supported files in a directory (non-recursive)
-uv run python -m mistral_ocr --submit /path/to/documents/
+uv run python -m mistral_ocr submit /path/to/documents/
 
 # Submit all files recursively (includes subdirectories)
-uv run python -m mistral_ocr --submit /path/to/documents/ --recursive
+uv run python -m mistral_ocr submit /path/to/documents/ --recursive
 
 # Submit directory with document naming
-uv run python -m mistral_ocr --submit /path/to/invoices/ --recursive --document-name "Q4_Invoices"
+uv run python -m mistral_ocr submit /path/to/invoices/ --recursive --name "Q4_Invoices"
 ```
 
 ### Document Management
 
 ```bash
 # Create a new document with a specific name
-uv run python -m mistral_ocr --submit page1.png --document-name "Annual_Report"
+uv run python -m mistral_ocr submit page1.png --name "Annual_Report"
 
 # Add more pages to the same document
-uv run python -m mistral_ocr --submit page2.png --document-name "Annual_Report"
+uv run python -m mistral_ocr submit page2.png --name "Annual_Report"
 
 # Add pages to a specific document by UUID
-uv run python -m mistral_ocr --submit page3.png --document-uuid "123e4567-e89b-12d3-a456-426614174000"
+uv run python -m mistral_ocr submit page3.png --uuid "123e4567-e89b-12d3-a456-426614174000"
 ```
 
 ## Job Management
@@ -84,24 +84,21 @@ uv run python -m mistral_ocr --submit page3.png --document-uuid "123e4567-e89b-1
 ### Checking Job Status
 
 ```bash
-# Check the status of a specific job
-uv run python -m mistral_ocr --check-job job_001
-
 # List all jobs with their status
-uv run python -m mistral_ocr --list-jobs
+uv run python -m mistral_ocr jobs list
 
 # Show detailed status for a specific job (includes API response details)
-uv run python -m mistral_ocr --job-status job_001
+uv run python -m mistral_ocr jobs status job_001
 
 # Query all jobs associated with a document name
-uv run python -m mistral_ocr --query-document "Annual_Report"
+uv run python -m mistral_ocr documents query "Annual_Report"
 ```
 
 ### Job Control
 
 ```bash
 # Cancel a running job
-uv run python -m mistral_ocr --cancel-job job_001
+uv run python -m mistral_ocr jobs cancel job_001
 ```
 
 ## Result Retrieval
@@ -110,16 +107,16 @@ uv run python -m mistral_ocr --cancel-job job_001
 
 ```bash
 # Retrieve results for a completed job (displays in terminal)
-uv run python -m mistral_ocr --get-results job_001
+uv run python -m mistral_ocr results get job_001
 
 # Download results to default location
-uv run python -m mistral_ocr --download-results job_001
+uv run python -m mistral_ocr results download job_001
 
 # Download results to a specific directory
-uv run python -m mistral_ocr --download-results job_001 --download-to /path/to/save/results/
+uv run python -m mistral_ocr results download job_001 --output /path/to/save/results/
 
 # Download all results for a document by name or UUID
-uv run python -m mistral_ocr --download-document "Annual_Report" --download-to /path/to/save/
+uv run python -m mistral_ocr documents download "Annual_Report" --output /path/to/save/
 ```
 
 ## Job Status Values
@@ -166,7 +163,7 @@ Example with large file set:
 
 ```bash
 # This will create multiple batch jobs if >100 files
-uv run python -m mistral_ocr --submit /large_archive/ --recursive --document-name "Archive_2024"
+uv run python -m mistral_ocr submit /large_archive/ --recursive --name "Archive_2024"
 # Output: "Submitted 3 batch jobs: job_001, job_002, job_003"
 ```
 
@@ -176,30 +173,27 @@ uv run python -m mistral_ocr --submit /large_archive/ --recursive --document-nam
 
 ```bash
 # 1. Submit files
-uv run python -m mistral_ocr --submit contract.pdf --document-name "Contract_Review"
+uv run python -m mistral_ocr submit contract.pdf --name "Contract_Review"
 
-# 2. Check status (note the returned job ID from step 1)
-uv run python -m mistral_ocr --check-job job_002
+# 2. Get detailed status information (note the returned job ID from step 1)
+uv run python -m mistral_ocr jobs status job_002
 
-# 3. Get detailed status information
-uv run python -m mistral_ocr --job-status job_002
+# 3. Download results when completed
+uv run python -m mistral_ocr results download job_002 --output ./processed_contracts/
 
-# 4. Download results when completed
-uv run python -m mistral_ocr --download-results job_002 --download-to ./processed_contracts/
-
-# 5. Monitor document processing status
-uv run python -m mistral_ocr --query-document "Contract_Review"
+# 4. Monitor document processing status
+uv run python -m mistral_ocr documents query "Contract_Review"
 ```
 
 ### Large Archive Processing
 
 ```bash
 # Process a large document archive with automatic batching
-uv run python -m mistral_ocr --submit /archive/legal_documents/ --recursive \
-  --document-name "Legal_Archive_2024" --model mistral-ocr-latest
+uv run python -m mistral_ocr submit /archive/legal_documents/ --recursive \
+  --name "Legal_Archive_2024" --model mistral-ocr-latest
 
 # List all jobs and their current status
-uv run python -m mistral_ocr --list-jobs
+uv run python -m mistral_ocr jobs list
 ```
 
 ## Error Handling

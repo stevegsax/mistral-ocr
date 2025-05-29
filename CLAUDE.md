@@ -21,14 +21,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run specific test: `pytest tests/test_mistral_ocr.py::test_name`
 - Tests use xfail markers for unimplemented features
 
-### Configuration Commands
-- Show configuration: `uv run python -m mistral_ocr --config show`
-- Set API key: `uv run python -m mistral_ocr --config-set-api-key "key"`
-- Set default model: `uv run python -m mistral_ocr --config-set-model "model-name"`
-- Set download directory: `uv run python -m mistral_ocr --config-set-download-dir "/path"`
-- Enable/disable progress: `uv run python -m mistral_ocr --config-set-progress-enabled true/false`
-- Set monitor interval: `uv run python -m mistral_ocr --config-set-monitor-interval 10`
-- Reset to defaults: `uv run python -m mistral_ocr --config reset`
+### CLI Commands
+
+#### Document Submission
+- Submit file: `uv run python -m mistral_ocr submit /path/to/file.pdf`
+- Submit directory: `uv run python -m mistral_ocr submit /path/to/dir --recursive`
+- Submit with options: `uv run python -m mistral_ocr submit /path --name "My Document" --model "mistral-ocr-latest"`
+
+#### Job Management  
+- List all jobs: `uv run python -m mistral_ocr jobs list`
+- Check job status: `uv run python -m mistral_ocr jobs status <job-id>`
+- Cancel job: `uv run python -m mistral_ocr jobs cancel <job-id>`
+
+#### Results Management
+- View job results: `uv run python -m mistral_ocr results get <job-id>`
+- Download job results: `uv run python -m mistral_ocr results download <job-id> --output /path`
+
+#### Document Management
+- Query document: `uv run python -m mistral_ocr documents query "document-name"`
+- Download document: `uv run python -m mistral_ocr documents download "document-name" --output /path`
+
+#### Configuration
+- Show configuration: `uv run python -m mistral_ocr config show`
+- Set API key: `uv run python -m mistral_ocr config set api-key "your-key"`
+- Set default model: `uv run python -m mistral_ocr config set model "model-name"`
+- Set download directory: `uv run python -m mistral_ocr config set download-dir "/path"`
+- Reset to defaults: `uv run python -m mistral_ocr config reset`
 
 ### Logging and Monitoring
 - Log files location: `~/.local/state/mistral-ocr/`

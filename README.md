@@ -46,7 +46,7 @@ export MISTRAL_API_KEY="your-api-key-here"
 **Option 2: Configuration File**
 ```bash
 # Set API key in configuration file (~/.config/mistral-ocr/config.json)
-uv run python -m mistral_ocr --config-set-api-key "your-api-key-here"
+uv run python -m mistral_ocr config set api-key "your-api-key-here"
 ```
 
 ### Configuration Management
@@ -55,32 +55,21 @@ Use the built-in configuration commands to manage your settings:
 
 ```bash
 # Show current configuration (API key is hidden for security)
-uv run python -m mistral_ocr --config show
+uv run python -m mistral_ocr config show
 
 # Set default OCR model
-uv run python -m mistral_ocr --config-set-model "pixtral-12b-2412"
+uv run python -m mistral_ocr config set model "pixtral-12b-2412"
 
 # Set default download directory
-uv run python -m mistral_ocr --config-set-download-dir "/path/to/downloads"
+uv run python -m mistral_ocr config set download-dir "/path/to/downloads"
 
 # Reset all settings to defaults (preserves API key)
-uv run python -m mistral_ocr --config reset
+uv run python -m mistral_ocr config reset
 ```
 
 ### Progress Monitoring Settings
 
-Configure progress display behavior:
-
-```bash
-# Enable progress bars and real-time updates (default: enabled)
-uv run python -m mistral_ocr --config-set-progress-enabled true
-
-# Disable progress displays for quiet operation
-uv run python -m mistral_ocr --config-set-progress-enabled false
-
-# Set job monitoring refresh interval (1-300 seconds, default: 10)
-uv run python -m mistral_ocr --config-set-monitor-interval 5
-```
+Progress monitoring is now configured through the main configuration system. The new CLI structure provides a cleaner interface for these settings, which are managed through the unified `config set` command.
 
 ### Logging and Audit Trails
 
@@ -250,13 +239,13 @@ Submit a single file for OCR processing:
 
 ```bash
 # Submit a single image file
-uv run python -m mistral_ocr --submit document.png
+uv run python -m mistral_ocr submit document.png
 
 # Submit a PDF document
-uv run python -m mistral_ocr --submit report.pdf
+uv run python -m mistral_ocr submit report.pdf
 
 # Submit with a custom model
-uv run python -m mistral_ocr --submit image.jpg --model mistral-ocr-latest
+uv run python -m mistral_ocr submit image.jpg --model mistral-ocr-latest
 ```
 
 ### Directory Processing
@@ -265,13 +254,13 @@ Submit entire directories with various options:
 
 ```bash
 # Submit all supported files in a directory (non-recursive)
-uv run python -m mistral_ocr --submit /path/to/documents/
+uv run python -m mistral_ocr submit /path/to/documents/
 
 # Submit all files recursively (includes subdirectories)
-uv run python -m mistral_ocr --submit /path/to/documents/ --recursive
+uv run python -m mistral_ocr submit /path/to/documents/ --recursive
 
 # Submit directory with document naming
-uv run python -m mistral_ocr --submit /path/to/invoices/ --recursive --document-name "Q4_Invoices"
+uv run python -m mistral_ocr submit /path/to/invoices/ --recursive --name "Q4_Invoices"
 ```
 
 ### Document Management
@@ -280,13 +269,13 @@ Associate files with named documents for better organization:
 
 ```bash
 # Create a new document with a specific name
-uv run python -m mistral_ocr --submit page1.png --document-name "Annual_Report"
+uv run python -m mistral_ocr submit page1.png --name "Annual_Report"
 
 # Add more pages to the same document (creates new document if name doesn't exist)
-uv run python -m mistral_ocr --submit page2.png --document-name "Annual_Report"
+uv run python -m mistral_ocr submit page2.png --name "Annual_Report"
 
 # Add pages to a specific document by UUID
-uv run python -m mistral_ocr --submit page3.png --document-uuid "123e4567-e89b-12d3-a456-426614174000"
+uv run python -m mistral_ocr submit page3.png --uuid "123e4567-e89b-12d3-a456-426614174000"
 ```
 
 ### Job Management
@@ -294,20 +283,14 @@ uv run python -m mistral_ocr --submit page3.png --document-uuid "123e4567-e89b-1
 Track and manage your OCR jobs:
 
 ```bash
-# Check the status of a specific job
-uv run python -m mistral_ocr --check-job job_001
-
 # List all jobs with their status
-uv run python -m mistral_ocr --list-jobs
+uv run python -m mistral_ocr jobs list
 
 # Show detailed status for a specific job (includes API response details)
-uv run python -m mistral_ocr --job-status job_001
-
-# Query all jobs associated with a document name
-uv run python -m mistral_ocr --query-document "Annual_Report"
+uv run python -m mistral_ocr jobs status job_001
 
 # Cancel a running job
-uv run python -m mistral_ocr --cancel-job job_001
+uv run python -m mistral_ocr jobs cancel job_001
 ```
 
 ### Result Retrieval
@@ -316,38 +299,28 @@ Get and download OCR results:
 
 ```bash
 # Retrieve results for a completed job (displays in terminal)
-uv run python -m mistral_ocr --get-results job_001
+uv run python -m mistral_ocr results get job_001
 
 # Download results to default location (XDG_DATA_HOME or ~/.local/share/mistral-ocr/)
-uv run python -m mistral_ocr --download-results job_001
+uv run python -m mistral_ocr results download job_001
 
 # Download results to a specific directory
-uv run python -m mistral_ocr --download-results job_001 --download-to /path/to/save/results/
+uv run python -m mistral_ocr results download job_001 --output /path/to/save/results/
 
 # Download all results for a document by name or UUID
-uv run python -m mistral_ocr --download-document "Annual_Report" --download-to /path/to/save/
+uv run python -m mistral_ocr documents download "Annual_Report" --output /path/to/save/
 ```
 
-### Progress Monitoring
+### Document Queries
 
-The tool provides real-time progress tracking for long-running operations:
+Query and manage documents:
 
 ```bash
-# File submission with progress bars showing:
-# - File collection phase
-# - File encoding phase  
-# - Upload progress for batch files
-# - Job creation progress
-uv run python -m mistral_ocr --submit /large_directory/ --recursive
+# Query all jobs associated with a document name
+uv run python -m mistral_ocr documents query "Annual_Report"
 
-# Monitor job status with live updates (when available)
-uv run python -m mistral_ocr --watch-jobs job_001 job_002
-
-# Download results with progress tracking
-uv run python -m mistral_ocr --download-results job_001
-
-# Disable progress for automated scripts
-uv run python -m mistral_ocr --submit docs/ --quiet
+# Download all results for a document
+uv run python -m mistral_ocr documents download "Annual_Report" --output /path/to/save/
 ```
 
 **Progress Features:**
@@ -363,21 +336,20 @@ Complex workflow examples:
 
 ```bash
 # Process a large document archive with automatic batching
-uv run python -m mistral_ocr --submit /archive/legal_documents/ --recursive \
-  --document-name "Legal_Archive_2024" --model mistral-ocr-latest
+uv run python -m mistral_ocr submit /archive/legal_documents/ --recursive \
+  --name "Legal_Archive_2024" --model mistral-ocr-latest
 
 # Submit, check status, and download results in sequence
-uv run python -m mistral_ocr --submit contract.pdf --document-name "Contract_Review"
+uv run python -m mistral_ocr submit contract.pdf --name "Contract_Review"
 # Note the returned job ID, then:
-uv run python -m mistral_ocr --check-job job_002
-uv run python -m mistral_ocr --job-status job_002  # Get detailed status information
-uv run python -m mistral_ocr --download-results job_002 --download-to ./processed_contracts/
+uv run python -m mistral_ocr jobs status job_002  # Get detailed status information
+uv run python -m mistral_ocr results download job_002 --output ./processed_contracts/
 
 # Monitor document processing status
-uv run python -m mistral_ocr --query-document "Contract_Review"
+uv run python -m mistral_ocr documents query "Contract_Review"
 
 # List all jobs and their current status
-uv run python -m mistral_ocr --list-jobs
+uv run python -m mistral_ocr jobs list
 ```
 
 ## Supported File Types
@@ -415,7 +387,7 @@ Example with large file set:
 
 ```bash
 # This will create multiple batch jobs if >100 files
-uv run python -m mistral_ocr --submit /large_archive/ --recursive --document-name "Archive_2024"
+uv run python -m mistral_ocr submit /large_archive/ --recursive --name "Archive_2024"
 # Output: "Submitted 3 batch jobs: job_001, job_002, job_003"
 ```
 
@@ -467,11 +439,29 @@ uv run python -m mistral_ocr --help
 ```
 
 **Available Commands:**
-- File submission: `--submit`, `--recursive`, `--document-name`, `--document-uuid`, `--model`
-- Job management: `--check-job`, `--list-jobs`, `--job-status`, `--query-document`, `--cancel-job`
-- Result retrieval: `--get-results`, `--download-results`, `--download-document`, `--download-to`
-- Configuration: `--config`, `--config-set-api-key`, `--config-set-model`, `--config-set-download-dir`
-- Progress settings: `--config-set-progress-enabled`, `--config-set-monitor-interval`, `--quiet`
+- **submit**: Submit files for OCR processing
+  - `submit <path>` - Submit file or directory
+  - `--recursive` - Process directories recursively
+  - `--name NAME` - Associate with document name
+  - `--uuid UUID` - Associate with document UUID
+  - `--model MODEL` - Specify OCR model
+- **jobs**: Manage OCR jobs
+  - `jobs list` - List all jobs
+  - `jobs status <job-id>` - Show detailed job status
+  - `jobs cancel <job-id>` - Cancel a job
+- **results**: Manage job results
+  - `results get <job-id>` - Display job results
+  - `results download <job-id>` - Download job results
+  - `--output DIR` - Specify output directory
+- **documents**: Manage documents
+  - `documents query <name-or-uuid>` - Query document status
+  - `documents download <name-or-uuid>` - Download document results
+  - `--output DIR` - Specify output directory
+- **config**: Manage configuration
+  - `config show` - Show current configuration
+  - `config reset` - Reset to defaults
+  - `config set <key> <value>` - Set configuration values
+    - Keys: `api-key`, `model`, `download-dir`
 
 ## Implementation Notes
 

@@ -45,14 +45,14 @@ class TestJobStatusListing:
 
     def test_list_all_jobs_command(self) -> None:
         """Test CLI command to list all jobs."""
-        result = run_cli("--list-jobs")
+        result = run_cli("jobs", "list")
         assert result.returncode == 0
         # Should handle empty list gracefully or show headers
         assert "No jobs found" in result.stdout or "Job ID" in result.stdout
 
     def test_list_jobs_shows_all_statuses(self) -> None:
         """Test that list jobs shows jobs of all statuses."""
-        result = run_cli("--list-jobs")
+        result = run_cli("jobs", "list")
         assert result.returncode == 0
         # Should handle empty list gracefully
         assert "No jobs found" in result.stdout or "Job ID" in result.stdout
@@ -66,7 +66,7 @@ class TestJobStatusListing:
         test_file.write_bytes(b"fakepng")
 
         # Submit the file via CLI to create a job
-        submit_result = run_cli("--submit", str(test_file))
+        submit_result = run_cli("submit", str(test_file))
         assert submit_result.returncode == 0
 
         # Extract job ID from the output (format: "Submitted job: job_001")
@@ -75,7 +75,7 @@ class TestJobStatusListing:
         job_id = job_line.split("Submitted job: ")[1]
 
         # Now test the job status command
-        result = run_cli("--job-status", job_id)
+        result = run_cli("jobs", "status", job_id)
         assert result.returncode == 0
         assert f"Job ID: {job_id}" in result.stdout
         assert "Status:" in result.stdout
@@ -91,13 +91,13 @@ class TestJobStatusListing:
         with patch("mistral_ocr.client.MistralOCRClient.get_job_details") as mock_get_details:
             mock_get_details.side_effect = JobNotFoundError("Job not found")
 
-            result = run_cli("--job-status", "invalid_job")
+            result = run_cli("jobs", "status", "invalid_job")
             assert result.returncode != 0
             assert "error" in result.stderr.lower() or "not found" in result.stderr.lower()
 
     def test_list_jobs_table_format(self) -> None:
         """Test that list jobs outputs in readable table format."""
-        result = run_cli("--list-jobs")
+        result = run_cli("jobs", "list")
         assert result.returncode == 0
         # Should have header and proper column alignment
         lines = result.stdout.split("\n")
