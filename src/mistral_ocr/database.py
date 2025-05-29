@@ -485,7 +485,7 @@ class Database:
             job_info = JobInfo(
                 id=row[0],
                 status=row[1],
-                submitted=row[2],
+                submitted=row[2].isoformat() if row[2] else None,
                 created_at=row[3],
                 completed_at=row[4],
                 file_count=row[5],
@@ -493,7 +493,7 @@ class Database:
                 output_file=row[7],
                 errors=errors,
                 metadata=metadata,
-                last_api_refresh=row[10],
+                last_api_refresh=row[10].isoformat() if row[10] else None,
             )
             jobs.append(job_info)
 
@@ -559,10 +559,10 @@ class Database:
             id=result[0],
             status=result[1],
             file_count=result[2] or result[10],  # Use total_requests if file_count is None
-            submitted=result[3],
-            updated=result[4],
+            submitted=result[3].isoformat() if result[3] else None,
+            updated=result[4].isoformat() if result[4] else None,
             document_name=result[5],
-            last_api_refresh=result[6],
+            last_api_refresh=result[6].isoformat() if result[6] else None,
             api_response_json=result[7],
             completed=result[9] if result[1] in ["completed", "success"] else None,
             error=None,  # Could be extended to store error messages
