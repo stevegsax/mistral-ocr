@@ -4,7 +4,9 @@ import json
 from typing import Any, Dict, List, Optional
 
 import structlog
+from pydantic import ValidationError
 
+from .data_types import BatchResultEntry, OCRResponseBody
 from .models import OCRResult
 
 
@@ -36,15 +38,49 @@ class OCRResultParser:
             if result_line.strip():
                 try:
                     result_data = json.loads(result_line)
-                    ocr_result = self._parse_individual_ocr_result(result_data, job_id)
+                    # First deserialize to Pydantic model for validation
+                    batch_entry = BatchResultEntry(**result_data)
+                    # Then process to OCR result
+                    ocr_result = self._process_batch_entry(batch_entry, job_id)
                     if ocr_result:
                         parsed_results.append(ocr_result)
                 except json.JSONDecodeError as e:
                     self.logger.warning(f"Failed to parse result line: {e}")
+                except ValidationError as e:
+                    self.logger.warning(f"Failed to validate result structure: {e}")
                 except Exception as e:
                     self.logger.error(f"Error processing result: {e}")
 
         return parsed_results
+
+    def _process_batch_entry(
+        self, batch_entry: BatchResultEntry, job_id: str
+    ) -> Optional[OCRResult]:
+        """Process a validated batch entry to OCR result.
+
+        Args:
+            batch_entry: Validated Pydantic batch entry
+            job_id: Job ID for context
+
+        Returns:
+            Parsed OCR result or None if processing fails
+        """
+        # Extract text content using various possible formats
+        text_content = self._extract_text_content_from_body(batch_entry.response.body)
+        if not text_content:
+            return None
+
+        # Extract markdown content (fallback to text if not available)
+        markdown_content = self._extract_markdown_content_from_body(
+            batch_entry.response.body, text_content
+        )
+
+        return OCRResult(
+            text=text_content, 
+            markdown=markdown_content, 
+            file_name=batch_entry.custom_id, 
+            job_id=job_id
+        )
 
     def _parse_individual_ocr_result(
         self, result_data: Dict[str, Any], job_id: str
@@ -129,6 +165,63 @@ class OCRResultParser:
         # Check for direct markdown format
         if "markdown" in response_body:
             return response_body["markdown"]
+
+        # Use text content as fallback
+        return fallback_text
+
+    def _extract_text_content_from_body(self, response_body: OCRResponseBody) -> Optional[str]:
+        """Extract text content from typed response body.
+
+        Args:
+            response_body: Typed response body from API
+
+        Returns:
+            Extracted text content or None
+        """
+        # Check for pages format (Mistral OCR API)
+        if response_body.pages and len(response_body.pages) > 0:
+            page = response_body.pages[0]  # Use first page
+            if page.text:
+                return page.text
+            elif page.markdown:
+                return page.markdown
+
+        # Check for direct text/content format
+        if response_body.text:
+            return response_body.text
+
+        if response_body.content:
+            return response_body.content
+
+        # Fallback to choices format
+        if response_body.choices and len(response_body.choices) > 0:
+            choice = response_body.choices[0]
+            if "message" in choice and "content" in choice["message"]:
+                return choice["message"]["content"]
+
+        return None
+
+    def _extract_markdown_content_from_body(
+        self, response_body: OCRResponseBody, fallback_text: str
+    ) -> str:
+        """Extract markdown content from typed response body.
+
+        Args:
+            response_body: Typed response body from API
+            fallback_text: Text content to use as fallback
+
+        Returns:
+            Markdown content or fallback text
+        """
+        # Check for pages format with markdown
+        if response_body.pages and len(response_body.pages) > 0:
+            page = response_body.pages[0]
+            if page.markdown:
+                return page.markdown
+
+        # Check for direct markdown format
+        if response_body.markdown:
+            return response_body.markdown
 
         # Use text content as fallback
         return fallback_text

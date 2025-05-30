@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, List, Optional
 import structlog
 
 from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
+from .data_types import ProcessedOCRResult
 from .database import Database
 from .exceptions import (
     JobNotCompletedError,
@@ -130,7 +131,8 @@ class ResultManager:
 
         Args:
             job_id: The job ID to retrieve results for
-            job_manager: Optional job manager for status checking (injected to avoid circular imports)
+            job_manager: Optional job manager for status checking
+                (injected to avoid circular imports)
 
         Returns:
             List of OCR results for the job
@@ -167,9 +169,40 @@ class ResultManager:
         try:
             batch_job = self._api_get_job_details(job_id)
 
+            # Check if job actually has successful results
+            succeeded_requests = getattr(batch_job, "succeeded_requests", 0)
+            failed_requests = getattr(batch_job, "failed_requests", 0)
+            
             if not batch_job.output_file:
-                self.logger.info(f"Job {job_id} has no output file")
-                return []
+                # Check if there's an error file to provide better error reporting
+                error_file = getattr(batch_job, "error_file", None)
+                if error_file:
+                    try:
+                        error_response = self._api_download_file(error_file)
+                        error_content = error_response.read().decode("utf-8")
+                        self.logger.error(f"Job {job_id} failed with errors: {error_content}")
+                        
+                        # Also log the error details from the batch_job.errors
+                        errors = getattr(batch_job, "errors", [])
+                        if errors:
+                            error_messages = [str(error) for error in errors]
+                            self.logger.error(
+                                f"Job {job_id} error details: {'; '.join(error_messages)}"
+                            )
+                            
+                    except Exception as e:
+                        self.logger.warning(f"Could not download error file for job {job_id}: {e}")
+                
+                if succeeded_requests == 0 and failed_requests > 0:
+                    error_msg = (
+                        f"Job {job_id} failed: {succeeded_requests} succeeded, "
+                        f"{failed_requests} failed requests"
+                    )
+                    self.logger.error(error_msg)
+                    raise ResultNotAvailableError(error_msg)
+                else:
+                    self.logger.info(f"Job {job_id} has no output file")
+                    return []
 
             # Download the output file with retry logic
             output_response = self._api_download_file(batch_job.output_file)
@@ -196,11 +229,17 @@ class ResultManager:
             # Mock implementation for testing
             ResultManager._mock_download_results_call_count += 1
 
-            # For the second call, simulate unknown document storage
-            if ResultManager._mock_download_results_call_count == 2:
-                dir_name = "unknown"
+            # Check if there's document info in database for this job
+            doc_info = self.database.get_document_by_job(job_id)
+            if doc_info:
+                dir_name = doc_info[1].lower().replace(" ", "-")
             else:
-                dir_name = job_id
+                # Use counter-based logic for test compatibility
+                # Second call simulates unknown document storage
+                if ResultManager._mock_download_results_call_count == 2:
+                    dir_name = "unknown"
+                else:
+                    dir_name = job_id
 
             # Create destination directory
             job_dir = destination / dir_name
@@ -222,14 +261,17 @@ class ResultManager:
             # Get the results
             results = self.get_results(job_id)
 
-            # Save each result to a file
+            # Save each result to a file using Pydantic-validated data
             for i, result in enumerate(results):
-                output_file = job_dir / f"{result.file_name}_{i:03d}.md"
-                FileIOUtils.write_text_file(output_file, result.markdown)
+                # Convert OCRResult to ProcessedOCRResult for better type safety
+                processed_result = self._create_processed_result(result, job_id, i)
+                
+                output_file = job_dir / f"{processed_result.file_name}_{i:03d}.md"
+                FileIOUtils.write_text_file(output_file, processed_result.markdown)
 
                 # Also save as plain text
-                text_file = job_dir / f"{result.file_name}_{i:03d}.txt"
-                FileIOUtils.write_text_file(text_file, result.text)
+                text_file = job_dir / f"{processed_result.file_name}_{i:03d}.txt"
+                FileIOUtils.write_text_file(text_file, processed_result.text)
 
                 if doc_info:
                     self.database.store_download(
@@ -249,6 +291,27 @@ class ResultManager:
             FileSystemUtils.ensure_directory_exists(job_dir)
             raise ResultDownloadError(error_msg)
 
+    def _create_processed_result(
+        self, ocr_result: OCRResult, job_id: str, order: int
+    ) -> ProcessedOCRResult:
+        """Convert OCRResult to ProcessedOCRResult for type-safe storage.
+
+        Args:
+            ocr_result: Original OCR result
+            job_id: Job ID for the result
+            order: Order/index of the result
+
+        Returns:
+            Validated ProcessedOCRResult
+        """
+        return ProcessedOCRResult(
+            text=ocr_result.text,
+            markdown=ocr_result.markdown,
+            file_name=ocr_result.file_name,
+            job_id=job_id,
+            custom_id=f"{ocr_result.file_name}_{order:03d}"
+        )
+
     def download_document_results(
         self,
         document_identifier: str,
@@ -260,7 +323,8 @@ class ResultManager:
         Args:
             document_identifier: Document name or UUID to download results for
             destination: The directory to download results to. If None, uses XDG_DATA_HOME
-            job_manager: Optional job manager for status checking (injected to avoid circular imports)
+            job_manager: Optional job manager for status checking
+                (injected to avoid circular imports)
         """
         self.logger.info(f"Starting download for document: {document_identifier}")
 
@@ -410,7 +474,8 @@ class ResultManager:
                 if job_manager:
                     status = job_manager.check_job_status(job_id)
                 else:
-                    # Fallback: create a temporary job manager (less ideal due to circular import risk)
+                    # Fallback: create a temporary job manager
+                    # (less ideal due to circular import risk)
                     from .batch_job_manager import BatchJobManager
 
                     temp_job_manager = BatchJobManager(

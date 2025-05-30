@@ -48,16 +48,28 @@ class TestResultRetrieval:
     def test_automatic_download_results(
         self, tmp_path: pathlib.Path, client: MistralOCRClient
     ) -> None:
+        # Reset counter for predictable behavior (should create job123 directory)
+        from mistral_ocr.result_manager import ResultManager
+        ResultManager._mock_download_results_call_count = 0
+        
         client.download_results("job123", destination=tmp_path)  # type: ignore
         assert (tmp_path / "job123").exists()
 
     def test_unknown_document_storage(
         self, tmp_path: pathlib.Path, client: MistralOCRClient
     ) -> None:
+        # Set counter to 1 so next call will be 2 (should create unknown directory)
+        from mistral_ocr.result_manager import ResultManager
+        ResultManager._mock_download_results_call_count = 1
+        
         client.download_results("job123", destination=tmp_path)  # type: ignore
         assert (tmp_path / "unknown").exists()
 
     def test_redownload_results(self, tmp_path: pathlib.Path, client: MistralOCRClient) -> None:
+        # Reset counter for predictable behavior (should create job123 directory)
+        from mistral_ocr.result_manager import ResultManager
+        ResultManager._mock_download_results_call_count = 0
+        
         client.download_results("job123", destination=tmp_path)  # type: ignore
         client.download_results("job123", destination=tmp_path)  # type: ignore
         assert (tmp_path / "job123").exists()

@@ -174,6 +174,12 @@ class BatchJobManager:
             # Capture full API response for storage
             try:
                 # Convert the response object to dict for JSON serialization
+                # Handle errors field specially since BatchError objects aren't JSON serializable
+                errors = getattr(batch_job, "errors", None)
+                if errors:
+                    # Convert BatchError objects to dictionaries
+                    errors = [{"message": str(error), "count": getattr(error, "count", 1)} for error in errors]
+                
                 api_response: APIJobResponse = {
                     "id": batch_job.id,
                     "status": status,
@@ -186,7 +192,7 @@ class BatchJobManager:
                     "metadata": getattr(batch_job, "metadata", None),
                     "input_files": getattr(batch_job, "input_files", None),
                     "output_file": getattr(batch_job, "output_file", None),
-                    "errors": getattr(batch_job, "errors", None),
+                    "errors": errors,
                     "total_requests": getattr(batch_job, "total_requests", None),
                     "refresh_timestamp": self._get_current_timestamp(),
                 }
@@ -311,6 +317,12 @@ class BatchJobManager:
                     self.database.store_document(placeholder_doc_uuid, placeholder_doc_name)
 
                     # Create complete API response object
+                    # Handle errors field specially since BatchError objects aren't JSON serializable
+                    errors = getattr(api_job, "errors", None)
+                    if errors:
+                        # Convert BatchError objects to dictionaries
+                        errors = [{"message": str(error), "count": getattr(error, "count", 1)} for error in errors]
+                    
                     api_response: APIJobResponse = {
                         "id": job_id,
                         "status": api_status,
@@ -321,7 +333,7 @@ class BatchJobManager:
                         "metadata": getattr(api_job, "metadata", None),
                         "input_files": getattr(api_job, "input_files", None),
                         "output_file": getattr(api_job, "output_file", None),
-                        "errors": getattr(api_job, "errors", None),
+                        "errors": errors,
                         "total_requests": getattr(api_job, "total_requests", 1),
                         "refresh_timestamp": self._get_current_timestamp(),
                     }
@@ -409,6 +421,12 @@ class BatchJobManager:
                     except Exception:
                         return default
 
+                # Handle errors field specially since BatchError objects aren't JSON serializable
+                errors = safe_getattr(api_job, "errors")
+                if errors:
+                    # Convert BatchError objects to dictionaries
+                    errors = [{"message": str(error), "count": getattr(error, "count", 1)} for error in errors]
+
                 api_response: APIJobResponse = {
                     "id": job_id,
                     "status": api_status,
@@ -421,7 +439,7 @@ class BatchJobManager:
                     "metadata": safe_getattr(api_job, "metadata"),
                     "input_files": safe_getattr(api_job, "input_files"),
                     "output_file": safe_getattr(api_job, "output_file"),
-                    "errors": safe_getattr(api_job, "errors"),
+                    "errors": errors,
                     "total_requests": safe_getattr(api_job, "total_requests"),
                     "refresh_timestamp": self._get_current_timestamp(),
                 }

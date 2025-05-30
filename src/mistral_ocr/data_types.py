@@ -156,3 +156,51 @@ class BatchFileEntry:
 
     custom_id: str
     body: BatchFileBody
+
+
+# OCR Result Download Data Models
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class OCRPage:
+    """OCR result for a single page."""
+    
+    text: Optional[str] = None
+    markdown: Optional[str] = None
+
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class OCRResponseBody:
+    """OCR API response body structure."""
+    
+    pages: Optional[List[OCRPage]] = None
+    text: Optional[str] = None
+    content: Optional[str] = None
+    markdown: Optional[str] = None
+    choices: Optional[List[Dict[str, Any]]] = None
+
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class OCRApiResponse:
+    """OCR API response structure."""
+    
+    body: OCRResponseBody
+    status_code: Optional[int] = None
+
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class BatchResultEntry:
+    """Single result entry from batch JSONL output."""
+    
+    custom_id: str
+    response: OCRApiResponse
+
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class ProcessedOCRResult:
+    """Processed OCR result ready for storage."""
+    
+    text: str
+    markdown: str
+    file_name: str
+    job_id: str
+    custom_id: str
