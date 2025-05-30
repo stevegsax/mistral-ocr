@@ -6,8 +6,10 @@
 
 ### Prerequisites
 - Python 3.12+
-- `uv` package manager
+- `uv` package manager (recommended) or `pip`
 - Git
+
+> **Note**: This project uses `uv` for package management. If you don't have `uv` installed, you can install it with `pip install uv` or use standard `pip` commands instead.
 
 ### Setup Development Environment
 
@@ -16,27 +18,31 @@
 git clone https://github.com/stevegsax/mistral-ocr.git
 cd mistral-ocr
 
-# Activate virtual environment  
-source .venv/bin/activate
+# Create and activate virtual environment (if not using uv)
+# python -m venv .venv
+# source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install in development mode
 uv pip install -e .
 
-# Install development dependencies
-uv add --dev pytest mypy ruff
+# Development dependencies are in pyproject.toml, install with:
+# uv add --dev pytest mypy ruff (if not already in pyproject.toml)
 
 # Run tests to verify setup
-uv run pytest
+pytest
+
+# Run CLI to verify installation
+uv run python -m mistral_ocr --help
 ```
 
 ### First Contribution Workflow
 
-1. **Understand the Process**: Read `PROCESS.md` for our TDD approach
+1. **Understand the Architecture**: Read `ARCHITECTURE.md` for system overview and developer guide
 2. **Check Current Work**: Review `specs/02_TODO.md` for open tasks
 3. **Run the CLI**: `uv run python -m mistral_ocr --help`
-4. **Run Tests**: `uv run pytest tests/unit/` (should be fast)
+4. **Run Tests**: `pytest tests/unit/` (should be fast)
 5. **Make Changes**: Follow the TDD cycle in `PROCESS.md`
-6. **Quality Checks**: `ruff check && ruff format && mypy src/`
+6. **Quality Checks**: `ruff check --fix && ruff format && mypy src/ && pytest`
 
 ## Architecture Overview
 
@@ -80,9 +86,11 @@ uv run pytest
 
 - **Manager Pattern**: Each major functionality has a dedicated manager class
 - **Dependency Injection**: Components receive dependencies through constructors  
+- **Pydantic Validation**: API responses are validated using Pydantic models
 - **Retry with Backoff**: API operations use exponential backoff for resilience
 - **Progress Tracking**: Rich library provides terminal UI with context managers
-- **Type Safety**: Comprehensive type hints throughout the codebase
+- **Type Safety**: Comprehensive type hints and runtime validation throughout
+- **Structured Logging**: All operations use structured logging with audit trails
 
 ## Development Workflow
 
@@ -108,16 +116,79 @@ src/mistral_ocr/
 ├── document_manager.py      # Document naming and UUID handling
 ├── progress.py              # Progress tracking and UI updates
 ├── database.py              # SQLite operations and schema
+├── db_models.py             # SQLAlchemy ORM models
 ├── config.py                # Configuration management
 ├── settings.py              # Unified settings facade
 ├── validation.py            # Input validation decorators
 ├── exceptions.py            # Custom exception hierarchy
-├── data_types.py            # TypedDict definitions
+├── data_types.py            # Pydantic models for API responses
+├── models.py                # Legacy data models (being migrated)
+├── parsing.py               # API response parsing with validation
 ├── constants.py             # Application constants
+├── paths.py                 # XDG Base Directory management
+├── audit.py                 # Audit logging and security events
+├── async_utils.py           # Async/concurrency utilities
+├── files.py                 # File handling and collection
+├── logging.py               # Structured logging setup
 └── utils/                   # Utility modules
-    ├── file_operations.py   # File handling utilities
-    └── retry_manager.py     # Retry logic with backoff
+    ├── file_operations.py   # File I/O and filesystem utilities
+    └── retry_manager.py     # Retry logic with exponential backoff
 ```
+
+## Data Validation Architecture
+
+### Pydantic Models
+
+The codebase uses **Pydantic** for robust data validation and type safety:
+
+```python
+# API Response Models (data_types.py)
+@dataclass(config=ConfigDict(extra="forbid"))
+class OCRPage:
+    """Individual page result from API."""
+    text: Optional[str] = None
+    markdown: Optional[str] = None
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class BatchResultEntry:
+    """Single result from batch JSONL output."""
+    custom_id: str
+    response: OCRApiResponse
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class ProcessedOCRResult:
+    """Validated result ready for storage."""
+    text: str
+    markdown: str
+    file_name: str
+    job_id: str
+    custom_id: str
+```
+
+### Validation Pipeline
+
+API responses are automatically validated before processing:
+
+```python
+# In parsing.py - API response processing
+def parse_batch_output(self, output_content: str, job_id: str) -> List[OCRResult]:
+    for result_line in output_content.strip().split("\n"):
+        try:
+            result_data = json.loads(result_line)
+            # Pydantic validation step
+            batch_entry = BatchResultEntry(**result_data)
+            # Process validated data
+            ocr_result = self._process_batch_entry(batch_entry, job_id)
+        except ValidationError as e:
+            self.logger.warning(f"Failed to validate result structure: {e}")
+```
+
+### Benefits
+
+1. **Type Safety**: Automatic validation of API responses
+2. **Error Handling**: Clear validation error messages
+3. **Documentation**: Self-documenting data structures
+4. **IDE Support**: Better autocompletion and type checking
 
 ## Common Development Tasks
 
@@ -132,16 +203,19 @@ src/mistral_ocr/
 
 1. **Update `constants.py`** with new MIME type and extension
 2. **Add validation** in `files.py` FileCollector
-3. **Test encoding** in `utils/file_operations.py`
-4. **Write tests** for the new file type support
+3. **Update encoding logic** in `utils/file_operations.py`
+4. **Add Pydantic models** in `data_types.py` if needed for API responses
+5. **Write tests** for the new file type support
 
 ### Adding Configuration Options
 
 1. **Add constant** in `constants.py`
-2. **Add methods** in `config.py` ConfigurationManager
-3. **Expose in** `settings.py` Settings class
-4. **Add CLI commands** in `__main__.py`
-5. **Update documentation**
+2. **Update data model** in `data_types.py` ConfigData class
+3. **Add methods** in `config.py` ConfigurationManager
+4. **Expose in** `settings.py` Settings class
+5. **Add CLI commands** in `__main__.py`
+6. **Write tests** for new configuration options
+7. **Update documentation**
 
 ### Debugging Common Issues
 
@@ -182,13 +256,16 @@ client.settings.set_progress_enabled(False)
 ### Running Tests
 ```bash
 # Fast unit tests only
-uv run pytest tests/unit/ -v
+pytest tests/unit/ -v
 
 # All tests with coverage
-uv run pytest --cov=src/mistral_ocr
+pytest --cov=src/mistral_ocr
 
 # Specific test category
-uv run pytest tests/unit/test_file_submission.py -v
+pytest tests/unit/test_file_submission.py -v
+
+# Run with output capture disabled (for debugging)
+pytest tests/unit/test_result_retrieval.py -v -s
 ```
 
 ### Writing New Tests
@@ -196,6 +273,10 @@ uv run pytest tests/unit/test_file_submission.py -v
 # Use existing fixtures for consistency
 def test_new_feature(client, tmp_path):
     """Test description following our docstring format."""
+    # Reset mock counters for predictable behavior
+    from mistral_ocr.result_manager import ResultManager
+    ResultManager._mock_download_results_call_count = 0
+    
     # Arrange
     test_file = tmp_path / "test.png"
     test_file.write_bytes(b"fake png content")
@@ -205,6 +286,24 @@ def test_new_feature(client, tmp_path):
     
     # Assert
     assert result.startswith("job_")
+    
+def test_pydantic_validation():
+    """Test Pydantic model validation."""
+    from mistral_ocr.data_types import ProcessedOCRResult
+    
+    # Valid data should work
+    result = ProcessedOCRResult(
+        text="Sample text",
+        markdown="# Sample",
+        file_name="test.pdf",
+        job_id="job_123",
+        custom_id="test_001"
+    )
+    assert result.text == "Sample text"
+    
+    # Invalid data should raise ValidationError
+    with pytest.raises(ValidationError):
+        ProcessedOCRResult(text="", markdown="")  # Missing required fields
 ```
 
 ## Code Quality Standards
@@ -212,14 +311,17 @@ def test_new_feature(client, tmp_path):
 ### Required Checks
 ```bash
 # Linting and formatting
-uv run ruff check src/ tests/
-uv run ruff format src/ tests/
+ruff check src/ tests/
+ruff format src/ tests/
 
 # Type checking
-uv run mypy src/
+mypy src/
 
 # Tests
-uv run pytest
+pytest
+
+# All checks in sequence
+ruff check --fix && ruff format && mypy src/ && pytest
 ```
 
 ### Code Style
@@ -242,6 +344,9 @@ uv run pytest
 ```bash
 # Ensure package is installed in development mode
 uv pip install -e .
+
+# Or with standard pip
+pip install -e .
 ```
 
 **Test Failures**
@@ -251,28 +356,46 @@ rm -rf build/ dist/ src/mistral_ocr.egg-info/
 
 # Reset test database
 rm -rf /tmp/pytest-of-*/
+
+# Reset mock counters for predictable test behavior
+# This is often needed when tests run in different orders
+python -c "from mistral_ocr.result_manager import ResultManager; ResultManager._mock_download_results_call_count = 0"
+```
+
+**Pydantic Validation Errors**
+```bash
+# Check that your data matches the expected structure
+# Validation errors will show which fields are missing or invalid
+# Example: ValidationError: 1 validation error for BatchResultEntry
+
+# Debug by examining the data structure in the debugger or logs
 ```
 
 **API Rate Limiting**
 ```bash
-# Use mock mode for development
+# Use mock mode for development (default with api_key="test")
 export MISTRAL_OCR_MOCK_MODE=1
+
+# Or use test API key in code
+client = MistralOCRClient(api_key="test")  # Automatically enables mock mode
 ```
 
 ### Getting Help
 
-1. **Documentation**: Check `PROCESS.md`, `README.md`, and this guide
-2. **Tests**: Look at existing tests for usage examples
-3. **Issues**: Search existing GitHub issues
-4. **Code**: The codebase has comprehensive docstrings and type hints
+1. **Documentation**: Check `ARCHITECTURE.md` (developer guide), `PROCESS.md`, `README.md`, and this guide
+2. **Module Reference**: See `ARCHITECTURE.md` for detailed module explanations and usage guidance
+3. **Tests**: Look at existing tests for usage examples
+4. **Issues**: Search existing GitHub issues
+5. **Code**: The codebase has comprehensive docstrings and type hints
 
 ## Contributing Guidelines
 
 ### Before Submitting a PR
-1. ✅ All tests pass: `uv run pytest`
-2. ✅ Code quality checks pass: `ruff check && mypy src/`
-3. ✅ Documentation updated (if user-facing changes)
-4. ✅ Followed TDD process from `PROCESS.md`
+1. ✅ All tests pass: `pytest`
+2. ✅ Code quality checks pass: `ruff check --fix && ruff format && mypy src/`
+3. ✅ New Pydantic models added for any new API data structures
+4. ✅ Documentation updated (if user-facing changes)
+5. ✅ Followed TDD process from `PROCESS.md`
 
 ### PR Requirements
 - Clear description of changes and motivation
