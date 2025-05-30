@@ -1,6 +1,8 @@
 # Architecture Documentation
 
 > Deep dive into the mistral-ocr system architecture, design patterns, and component relationships
+> 
+> **For Developers**: This document explains how to understand, navigate, and extend the codebase
 
 ## System Overview
 
@@ -509,3 +511,548 @@ tests/
 3. Update dependency injection
 
 This architecture provides a solid foundation for maintainable, testable, and extensible OCR processing while maintaining excellent user experience through comprehensive error handling and progress feedback.
+
+---
+
+## Developer Guide
+
+### Module Reference
+
+Understanding what each module does is crucial for effective development:
+
+#### Core Modules
+
+**`client.py`** - Main Facade
+- Entry point for all OCR operations
+- Coordinates between all manager classes
+- Handles authentication and client initialization
+- **Usage**: Primary interface for CLI commands
+
+**`__main__.py`** - CLI Interface
+- Argument parsing and command routing
+- User input validation
+- Error presentation to users
+- **Usage**: CLI command definitions and help text
+
+#### Manager Modules
+
+**`batch_submission_manager.py`** - File Processing
+- File collection and validation
+- Batch creation (JSONL format) 
+- API upload coordination
+- **Key Classes**: `BatchSubmissionManager`, `FileCollector`
+- **Usage**: When adding new file type support
+
+**`batch_job_manager.py`** - Job Lifecycle
+- Job status monitoring and updates
+- Concurrent API operations
+- Job cancellation logic
+- **Key Classes**: `BatchJobManager`
+- **Usage**: When modifying job status logic
+
+**`result_manager.py`** - Result Handling
+- Result download and parsing
+- File organization by document
+- **Key Classes**: `ResultManager`, `OCRResultParser`
+- **Usage**: When changing result processing
+
+**`document_manager.py`** - Document Organization
+- Document naming and UUID management
+- Document-to-job associations
+- **Key Classes**: `DocumentManager`
+- **Usage**: When modifying document organization
+
+**`progress.py`** - UI Feedback
+- Real-time progress tracking
+- Rich terminal UI components
+- **Key Classes**: `ProgressManager`
+- **Usage**: When adding new progress indicators
+
+#### Data and Configuration
+
+**`data_types.py`** - Type Definitions
+- Pydantic models for API responses
+- Database record types
+- Configuration structures
+- **Key Classes**: `JobInfo`, `BatchResultEntry`, `ProcessedOCRResult`
+- **Usage**: When adding new data structures
+
+**`models.py`** - Legacy Models
+- Original data models (being migrated to data_types.py)
+- **Key Classes**: `OCRResult`
+- **Usage**: Understanding legacy code
+
+**`config.py`** - Configuration Management
+- User settings and preferences
+- Environment variable handling
+- **Key Classes**: `ConfigurationManager`
+- **Usage**: When adding new configuration options
+
+**`settings.py`** - Settings Facade
+- High-level settings interface
+- Validation and defaults
+- **Key Classes**: `Settings`
+- **Usage**: When adding user-configurable options
+
+#### Infrastructure
+
+**`database.py`** - Data Persistence
+- SQLite operations
+- Job and document tracking
+- **Key Classes**: `Database`
+- **Usage**: When adding new database operations
+
+**`db_models.py`** - SQLAlchemy Models
+- Database table definitions
+- Relationships and constraints
+- **Key Classes**: `Job`, `Document`, `Page`, `Download`
+- **Usage**: When modifying database schema
+
+**`parsing.py`** - Response Processing
+- API response parsing with Pydantic validation
+- OCR result extraction
+- **Key Classes**: `OCRResultParser`
+- **Usage**: When handling new API response formats
+
+**`validation.py`** - Input Validation
+- Decorator-based validation
+- Common validation patterns
+- **Key Functions**: `@validate_api_key`, `@validate_file_path`
+- **Usage**: When adding new validation rules
+
+#### Utilities
+
+**`utils/file_operations.py`** - File Handling
+- File I/O operations
+- Path manipulation
+- **Key Classes**: `FileIOUtils`, `FileSystemUtils`
+- **Usage**: When adding file operations
+
+**`utils/retry_manager.py`** - Resilience
+- Retry logic with exponential backoff
+- Error classification
+- **Key Functions**: `@with_retry`
+- **Usage**: When adding API operations
+
+**`async_utils.py`** - Concurrency
+- Async/await helpers
+- Concurrent operations
+- **Key Classes**: `ConcurrentJobProcessor`
+- **Usage**: When adding concurrent operations
+
+**`audit.py`** - Observability
+- Audit logging and trails
+- Security event tracking
+- **Key Classes**: `AuditLogger`, `SecurityLogger`
+- **Usage**: When adding audit events
+
+**`exceptions.py`** - Error Handling
+- Custom exception hierarchy
+- Error classification
+- **Key Classes**: `MistralOCRError`, `JobError`, `APIError`
+- **Usage**: When adding new error types
+
+**`constants.py`** - Configuration Values
+- Magic numbers and strings
+- Default values
+- **Usage**: When adding new constants
+
+**`paths.py`** - Directory Management
+- XDG Base Directory implementation
+- Cross-platform path handling
+- **Key Classes**: `XDGPaths`
+- **Usage**: When adding new file locations
+
+### Data Validation Architecture
+
+The codebase uses **Pydantic** for robust data validation and type safety:
+
+#### Pydantic Model Hierarchy
+
+```python
+# API Response Models (data_types.py)
+@dataclass(config=ConfigDict(extra="forbid"))
+class OCRPage:
+    """Individual page result from API."""
+    text: Optional[str] = None
+    markdown: Optional[str] = None
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class OCRResponseBody:
+    """API response body structure."""
+    pages: Optional[List[OCRPage]] = None
+    text: Optional[str] = None
+    content: Optional[str] = None
+    markdown: Optional[str] = None
+    choices: Optional[List[Dict[str, Any]]] = None
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class BatchResultEntry:
+    """Single result from batch JSONL output."""
+    custom_id: str
+    response: OCRApiResponse
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class ProcessedOCRResult:
+    """Validated result ready for storage."""
+    text: str
+    markdown: str
+    file_name: str
+    job_id: str
+    custom_id: str
+```
+
+#### Validation Pipeline
+
+```python
+# In parsing.py - API response processing
+def parse_batch_output(self, output_content: str, job_id: str) -> List[OCRResult]:
+    for result_line in output_content.strip().split("\n"):
+        try:
+            result_data = json.loads(result_line)
+            # Pydantic validation step
+            batch_entry = BatchResultEntry(**result_data)
+            # Process validated data
+            ocr_result = self._process_batch_entry(batch_entry, job_id)
+        except ValidationError as e:
+            self.logger.warning(f"Failed to validate result structure: {e}")
+        except Exception as e:
+            self.logger.error(f"Error processing result: {e}")
+```
+
+#### Benefits of Pydantic Integration
+
+1. **Type Safety**: Automatic validation of API responses
+2. **Error Handling**: Clear validation error messages
+3. **Documentation**: Self-documenting data structures
+4. **IDE Support**: Better autocompletion and type checking
+
+### Developer Workflow
+
+#### Setting Up Development Environment
+
+```bash
+# 1. Clone and setup
+git clone <repository>
+cd mistral-ocr
+
+# 2. Install with development dependencies
+uv pip install -e .
+
+# 3. Run tests to verify setup
+pytest
+
+# 4. Check code quality
+ruff check
+mypy src/
+```
+
+#### Development Process
+
+1. **Understanding the Feature**
+   - Read relevant sections in this document
+   - Examine existing similar features
+   - Check the module reference above
+
+2. **Writing Tests First (TDD)**
+   ```python
+   # In tests/unit/test_new_feature.py
+   def test_new_feature_basic_operation():
+       """Test the core functionality."""
+       client = MistralOCRClient(api_key="test")  # Mock mode
+       result = client.new_feature_method()
+       assert result.expected_property == "expected_value"
+   ```
+
+3. **Implementing the Feature**
+   - Follow existing patterns (Manager classes, dependency injection)
+   - Use type hints throughout
+   - Add proper error handling
+   - Include logging and audit events
+
+4. **Code Quality Checks**
+   ```bash
+   # Run before committing
+   ruff check --fix  # Auto-fix style issues
+   mypy src/         # Type checking
+   pytest           # All tests pass
+   ```
+
+#### Common Development Patterns
+
+**Adding a New Manager Class**
+
+```python
+class NewFeatureManager:
+    """Handles new feature operations."""
+    
+    def __init__(
+        self,
+        database: Database,
+        api_client: Optional["Mistral"],
+        logger: structlog.BoundLogger,
+        mock_mode: bool = False,
+    ) -> None:
+        self.database = database
+        self.client = api_client
+        self.logger = logger
+        self.mock_mode = mock_mode
+    
+    @with_retry(max_retries=3, base_delay=2.0)
+    def _api_operation(self, param: str) -> Any:
+        """API operation with retry logic."""
+        if self.mock_mode:
+            return self._mock_response()
+        
+        try:
+            return self.client.new_operation(param)
+        except Exception as e:
+            if self._is_transient_error(e):
+                raise RetryableError(f"Transient error: {e}")
+            raise
+    
+    def public_method(self, param: str) -> ProcessedResult:
+        """Main public interface method."""
+        with self.logger.bind(operation="new_feature", param=param):
+            self.logger.info("Starting new feature operation")
+            
+            try:
+                raw_result = self._api_operation(param)
+                processed = self._process_result(raw_result)
+                
+                self.logger.info("Completed new feature operation", 
+                               result_count=len(processed))
+                return processed
+                
+            except Exception as e:
+                self.logger.error("Failed new feature operation", error=str(e))
+                raise NewFeatureError(f"Operation failed: {e}")
+```
+
+**Adding a New CLI Command**
+
+```python
+# In __main__.py
+def add_new_command_parser(subparsers):
+    """Add new command to CLI."""
+    parser = subparsers.add_parser(
+        'new-command', 
+        help='Description of new command'
+    )
+    parser.add_argument('--param', required=True, help='Parameter description')
+    parser.set_defaults(func=handle_new_command)
+
+def handle_new_command(args):
+    """Handle the new command."""
+    try:
+        client = MistralOCRClient(api_key=args.api_key)
+        result = client.new_feature_method(args.param)
+        print(f"Success: {result}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+```
+
+**Adding New Data Models**
+
+```python
+# In data_types.py
+@dataclass(config=ConfigDict(extra="forbid", validate_assignment=True))
+class NewDataModel:
+    """New data structure with validation."""
+    
+    id: str
+    name: str
+    created_at: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        """Custom validation after initialization."""
+        if not self.id.startswith("prefix_"):
+            raise ValueError("ID must start with 'prefix_'")
+```
+
+#### Testing Patterns
+
+**Unit Test Structure**
+
+```python
+class TestNewFeature:
+    """Test new feature functionality."""
+    
+    @pytest.fixture
+    def manager(self, mock_database, mock_logger):
+        """Create manager instance for testing."""
+        return NewFeatureManager(
+            database=mock_database,
+            api_client=None,  # Mock mode
+            logger=mock_logger,
+            mock_mode=True
+        )
+    
+    def test_success_case(self, manager):
+        """Test successful operation."""
+        result = manager.public_method("test_param")
+        assert isinstance(result, ProcessedResult)
+        assert result.param == "test_param"
+    
+    def test_error_handling(self, manager):
+        """Test error conditions."""
+        with pytest.raises(NewFeatureError):
+            manager.public_method("invalid_param")
+    
+    @patch('mistral_ocr.new_feature_manager.external_dependency')
+    def test_with_mocks(self, mock_dependency, manager):
+        """Test with external dependencies mocked."""
+        mock_dependency.return_value = "expected_value"
+        result = manager.public_method("test_param")
+        assert result.value == "expected_value"
+```
+
+**Integration Test Structure**
+
+```python
+class TestNewFeatureIntegration:
+    """Test new feature end-to-end."""
+    
+    def test_full_workflow(self, test_client, tmp_path):
+        """Test complete workflow."""
+        # Setup test data
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test content")
+        
+        # Execute operation
+        result = test_client.new_feature_method(str(test_file))
+        
+        # Verify results
+        assert result.success
+        assert (tmp_path / "output").exists()
+```
+
+### Feature Development Guide
+
+#### Adding New File Type Support
+
+1. **Update Constants**
+   ```python
+   # In constants.py
+   MIME_TYPE_NEW_FORMAT = "application/new-format"
+   ```
+
+2. **Update Validation**
+   ```python
+   # In file validation logic
+   SUPPORTED_EXTENSIONS.add('.newext')
+   MIME_TYPE_MAP['.newext'] = MIME_TYPE_NEW_FORMAT
+   ```
+
+3. **Add Processing Logic**
+   ```python
+   # In batch_submission_manager.py
+   def _process_new_format(self, file_path: Path) -> Dict[str, Any]:
+       """Process new file format."""
+       # Implementation specific to new format
+   ```
+
+4. **Add Tests**
+   ```python
+   def test_new_format_processing(self, client, tmp_path):
+       new_file = tmp_path / "test.newext"
+       new_file.write_bytes(b"new format content")
+       
+       job_id = client.submit_documents([new_file])
+       assert job_id is not None
+   ```
+
+#### Adding New Configuration Options
+
+1. **Update Data Types**
+   ```python
+   # In data_types.py
+   @dataclass(config=ConfigDict(extra="allow"))
+   class ConfigData:
+       # ... existing fields ...
+       new_option: Optional[str] = None
+   ```
+
+2. **Add Settings Methods**
+   ```python
+   # In settings.py
+   def get_new_option(self) -> str:
+       """Get new configuration option."""
+       return self.config_manager.get("new_option", "default_value")
+   
+   def set_new_option(self, value: str) -> None:
+       """Set new configuration option."""
+       self.config_manager.set("new_option", value)
+   ```
+
+3. **Add CLI Support**
+   ```python
+   # In __main__.py config commands
+   elif args.config_action == "set" and args.key == "new-option":
+       client.settings.set_new_option(args.value)
+   ```
+
+#### Adding New API Operations
+
+1. **Create Manager Method**
+   ```python
+   # In appropriate manager class
+   @with_retry(max_retries=3, base_delay=2.0)
+   def _api_new_operation(self, param: str) -> Any:
+       """New API operation with retry logic."""
+       if self.mock_mode:
+           return {"mock": "response"}
+       
+       try:
+           return self.client.new_api_method(param)
+       except Exception as e:
+           if self._is_transient_error(e):
+               raise RetryableError(f"API error: {e}")
+           raise
+   ```
+
+2. **Add Data Models**
+   ```python
+   # In data_types.py
+   @dataclass(config=ConfigDict(extra="forbid"))
+   class NewAPIResponse:
+       """Response from new API operation."""
+       result: str
+       status: int
+       metadata: Optional[Dict[str, Any]] = None
+   ```
+
+3. **Add Error Handling**
+   ```python
+   # In exceptions.py
+   class NewOperationError(APIError):
+       """Error in new API operation."""
+       pass
+   ```
+
+### Code Style and Conventions
+
+#### Type Annotations
+- Use `Optional[T]` instead of `T | None` (per CLAUDE.md)
+- Always include return type annotations
+- Use `TYPE_CHECKING` for circular imports
+
+#### Error Handling
+- Create specific exception types for different error conditions
+- Use `@with_retry` for transient errors
+- Log errors with structured context
+
+#### Logging
+- Use structured logging with `structlog`
+- Include operation context in log messages
+- Use appropriate log levels (DEBUG, INFO, WARNING, ERROR)
+
+#### Testing
+- Write tests before implementation (TDD)
+- Use descriptive test names that explain the scenario
+- Test both success and failure cases
+- Use fixtures for common test setup
+
+This guide provides the foundation for understanding and extending the Mistral OCR codebase effectively.
