@@ -1,3 +1,6 @@
+# I have downloaded a copy of the full Mistral API
+mistral-api/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
