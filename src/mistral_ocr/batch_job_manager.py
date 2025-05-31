@@ -15,9 +15,9 @@ from .constants import (
     SERVER_JOB_NAME_TEMPLATE,
     UUID_PREFIX_LENGTH,
 )
+from .data_types import APIJobResponse, JobDetails, JobInfo
 from .database import Database
 from .exceptions import JobError, JobNotFoundError, RetryableError
-from .data_types import APIJobResponse, JobDetails, JobInfo
 from .utils.retry_manager import with_retry
 from .validation import validate_job_id
 

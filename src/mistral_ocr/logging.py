@@ -4,7 +4,6 @@ import hashlib
 import logging
 import logging.handlers
 import pathlib
-import sys
 from typing import Any, Dict
 
 import structlog

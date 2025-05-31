@@ -16,12 +16,12 @@ from .constants import (
     MOCK_JOB_ID_TEMPLATE,
     OCR_BATCH_ENDPOINT,
 )
+from .data_types import BatchFileBody, BatchFileEntry, DocumentContent
 from .database import Database
 from .document_manager import DocumentManager
 from .exceptions import JobSubmissionError, RetryableError
 from .files import FileCollector
 from .progress import ProgressManager
-from .data_types import BatchFileBody, BatchFileEntry, DocumentContent
 from .utils.file_operations import FileEncodingUtils, TempFileUtils
 from .utils.retry_manager import with_retry
 

@@ -7,9 +7,9 @@ from typing import Any, List, Optional, Tuple
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from .db_models import Base, Document, Job, Page, Download
-from .exceptions import DatabaseConnectionError
 from .data_types import APIJobResponse, JobDetails, JobInfo
+from .db_models import Base, Document, Download, Job, Page
+from .exceptions import DatabaseConnectionError
 from .validation import require_database_connection
 
 

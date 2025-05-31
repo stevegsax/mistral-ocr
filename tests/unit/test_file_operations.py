@@ -245,6 +245,27 @@ class TestFileIOUtils:
         assert text_file.exists()
         assert text_file.parent.exists()
 
+    def test_write_binary_file_success(self, tmp_path):
+        """Test binary file writing success."""
+        binary_content = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+        binary_file = tmp_path / "test.bin"
+
+        FileIOUtils.write_binary_file(binary_file, binary_content)
+
+        assert binary_file.exists()
+        assert binary_file.read_bytes() == binary_content
+
+    def test_write_binary_file_creates_parent_directory(self, tmp_path):
+        """Test binary file writing creates parent directories."""
+        binary_content = b"\x00\x01\x02\x03"
+        binary_file = tmp_path / "deep" / "nested" / "output.bin"
+
+        FileIOUtils.write_binary_file(binary_file, binary_content)
+
+        assert binary_file.exists()
+        assert binary_file.parent.exists()
+        assert binary_file.read_bytes() == binary_content
+
     def test_read_text_file_success(self, tmp_path):
         """Test text file reading success."""
         content = "Test content with unicode: 🚀"

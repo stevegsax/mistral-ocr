@@ -281,8 +281,8 @@ def main() -> None:
         SystemExit: On error conditions or missing configuration
     """
     # Set up minimal file-only logging before creating audit loggers
-    from mistral_ocr.settings import get_settings
     from mistral_ocr.logging import setup_logging
+    from mistral_ocr.settings import get_settings
     
     settings = get_settings()
     setup_logging(settings.state_directory, enable_console=False)

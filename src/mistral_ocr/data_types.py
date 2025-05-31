@@ -1,5 +1,6 @@
 """Type definitions for Mistral OCR data structures."""
 
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import ConfigDict
@@ -195,12 +196,71 @@ class BatchResultEntry:
     response: OCRApiResponse
 
 
+class ProcessedOCRFileType(Enum):
+    """File types supported in ProcessedOCRResult."""
+    
+    TEXT = "text"
+    MARKDOWN = "markdown"
+    IMAGE = "image"
+
+
+@dataclass(config=ConfigDict(extra="forbid"))
+class ProcessedOCRFile:
+    """Individual file content within an OCR result."""
+    
+    file_type: ProcessedOCRFileType
+    content: str  # Text content for TEXT/MARKDOWN, base64 for IMAGE
+    file_extension: Optional[str] = None  # .txt, .md, .png, .jpg, etc.
+    metadata: Optional[Dict[str, Any]] = None  # Additional file metadata
+
+
 @dataclass(config=ConfigDict(extra="forbid"))
 class ProcessedOCRResult:
-    """Processed OCR result ready for storage."""
+    """Processed OCR result ready for storage with multiple file types."""
     
-    text: str
-    markdown: str
+    # Basic identification
     file_name: str
     job_id: str
     custom_id: str
+    
+    # File contents - can contain multiple files
+    files: List[ProcessedOCRFile]
+    
+    # Backward compatibility - primary text and markdown content
+    text: Optional[str] = None
+    markdown: Optional[str] = None
+    
+    # Additional metadata
+    metadata: Optional[Dict[str, Any]] = None
+    
+    def get_text_content(self) -> Optional[str]:
+        """Get the primary text content."""
+        if self.text:
+            return self.text
+        
+        # Find first text file
+        for file in self.files:
+            if file.file_type == ProcessedOCRFileType.TEXT:
+                return file.content
+        
+        return None
+    
+    def get_markdown_content(self) -> Optional[str]:
+        """Get the primary markdown content."""
+        if self.markdown:
+            return self.markdown
+            
+        # Find first markdown file
+        for file in self.files:
+            if file.file_type == ProcessedOCRFileType.MARKDOWN:
+                return file.content
+        
+        return None
+    
+    def get_image_files(self) -> List[ProcessedOCRFile]:
+        """Get all image files as base64 content."""
+        return [file for file in self.files if file.file_type == ProcessedOCRFileType.IMAGE]
+    
+    def get_files_by_type(self, file_type: ProcessedOCRFileType) -> List[ProcessedOCRFile]:
+        """Get all files of a specific type."""
+        return [file for file in self.files if file.file_type == file_type]

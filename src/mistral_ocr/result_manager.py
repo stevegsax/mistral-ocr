@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, List, Optional
 import structlog
 
 from .async_utils import ConcurrentJobProcessor, run_async_in_sync_context
-from .data_types import ProcessedOCRResult
+from .data_types import ProcessedOCRFile, ProcessedOCRFileType, ProcessedOCRResult
 from .database import Database
 from .exceptions import (
     JobNotCompletedError,
@@ -266,17 +266,41 @@ class ResultManager:
                 # Convert OCRResult to ProcessedOCRResult for better type safety
                 processed_result = self._create_processed_result(result, job_id, i)
                 
-                output_file = job_dir / f"{processed_result.file_name}_{i:03d}.md"
-                FileIOUtils.write_text_file(output_file, processed_result.markdown)
+                # Save each file in the processed result
+                text_file = None
+                markdown_file = None
+                
+                for file_obj in processed_result.files:
+                    if file_obj.file_type == ProcessedOCRFileType.TEXT:
+                        text_file = job_dir / f"{processed_result.file_name}_{i:03d}.txt"
+                        FileIOUtils.write_text_file(text_file, file_obj.content)
+                    elif file_obj.file_type == ProcessedOCRFileType.MARKDOWN:
+                        markdown_file = job_dir / f"{processed_result.file_name}_{i:03d}.md"
+                        FileIOUtils.write_text_file(markdown_file, file_obj.content)
+                    elif file_obj.file_type == ProcessedOCRFileType.IMAGE:
+                        # Handle image files - save base64 content to file
+                        import base64
+                        extension = file_obj.file_extension or ".png"
+                        image_file = job_dir / f"{processed_result.file_name}_{i:03d}_image{extension}"
+                        try:
+                            image_data = base64.b64decode(file_obj.content)
+                            FileIOUtils.write_binary_file(image_file, image_data)
+                        except Exception as e:
+                            self.logger.warning(f"Failed to decode base64 image: {e}")
+                
+                # Backward compatibility - ensure text and markdown files exist
+                if not text_file and processed_result.text:
+                    text_file = job_dir / f"{processed_result.file_name}_{i:03d}.txt"
+                    FileIOUtils.write_text_file(text_file, processed_result.text)
+                
+                if not markdown_file and processed_result.markdown:
+                    markdown_file = job_dir / f"{processed_result.file_name}_{i:03d}.md"
+                    FileIOUtils.write_text_file(markdown_file, processed_result.markdown)
 
-                # Also save as plain text
-                text_file = job_dir / f"{processed_result.file_name}_{i:03d}.txt"
-                FileIOUtils.write_text_file(text_file, processed_result.text)
-
-                if doc_info:
+                if doc_info and text_file and markdown_file:
                     self.database.store_download(
                         text_path=str(text_file),
-                        markdown_path=str(output_file),
+                        markdown_path=str(markdown_file),
                         document_uuid=doc_info[0],
                         job_id=job_id,
                         document_order=i,
@@ -304,12 +328,33 @@ class ResultManager:
         Returns:
             Validated ProcessedOCRResult
         """
+        # Create file objects for text and markdown content
+        files = []
+        
+        if ocr_result.text:
+            text_file = ProcessedOCRFile(
+                file_type=ProcessedOCRFileType.TEXT,
+                content=ocr_result.text,
+                file_extension=".txt"
+            )
+            files.append(text_file)
+        
+        if ocr_result.markdown:
+            markdown_file = ProcessedOCRFile(
+                file_type=ProcessedOCRFileType.MARKDOWN,
+                content=ocr_result.markdown,
+                file_extension=".md"
+            )
+            files.append(markdown_file)
+        
         return ProcessedOCRResult(
-            text=ocr_result.text,
-            markdown=ocr_result.markdown,
             file_name=ocr_result.file_name,
             job_id=job_id,
-            custom_id=f"{ocr_result.file_name}_{order:03d}"
+            custom_id=f"{ocr_result.file_name}_{order:03d}",
+            files=files,
+            # Backward compatibility
+            text=ocr_result.text,
+            markdown=ocr_result.markdown
         )
 
     def download_document_results(

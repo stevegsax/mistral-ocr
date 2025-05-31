@@ -180,6 +180,23 @@ class FileIOUtils:
             f.write(content)
 
     @staticmethod
+    def write_binary_file(path: pathlib.Path, content: bytes) -> None:
+        """Write binary content to a file.
+
+        Args:
+            path: Path to write file
+            content: Binary content to write
+
+        Raises:
+            OSError: If file cannot be written
+        """
+        # Ensure parent directory exists
+        FileSystemUtils.ensure_directory_exists(path.parent)
+
+        with open(path, "wb") as f:
+            f.write(content)
+
+    @staticmethod
     def read_text_file(path: pathlib.Path, encoding: str = "utf-8") -> str:
         """Read text content from a file.
 

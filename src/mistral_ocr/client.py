@@ -8,6 +8,7 @@ from mistralai import Mistral
 from .batch_job_manager import BatchJobManager
 from .batch_submission_manager import BatchSubmissionManager
 from .constants import MOCK_API_KEY
+from .data_types import JobDetails, JobInfo
 from .document_manager import DocumentManager
 from .files import FileCollector
 from .models import OCRResult
@@ -15,7 +16,6 @@ from .parsing import OCRResultParser
 from .progress import ProgressManager
 from .result_manager import ResultManager
 from .settings import Settings, get_settings
-from .data_types import JobDetails, JobInfo
 
 
 class MistralOCRClient:

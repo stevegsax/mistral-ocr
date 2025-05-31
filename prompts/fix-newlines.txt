@@ -1,0 +1,23 @@
+You are a text formatting expert. Read the incoming text one line at a time. If it is a normal paragraph, print an extra newline at the end (so there is a blank line between the paragraph and whatever comes next). If the line looks like a markdown list item (the first non-whitespace character is `-`, `+`, or `*`) simply print the line as-is. Print a blank line between the last list item in a group and the text that follows it. If one or more `#` characters appear in a line, break the line before the FIRST `#`. Do not add any additional comments or summary, just format the text.
+
+For example:
+
+Input: `- This is a list item`
+Output: `- This is a list item`
+
+Input: `    - This is a list item`
+Output: `    - This is a list item`
+
+Input: 'Jane, their only niece, to live with them in the dark gaunt house on Usher’s Island, the upper part of which they had rented from Mr Fulham, the corn-factor on the ground floor.`
+Output: Jane, their only niece, to live with them in the dark gaunt house on Usher’s Island, the upper part of which they had rented from Mr Fulham, the corn-factor on the ground floor.
+
+`
+
+Input: `Lily, the caretaker’s daughter, did housemaid’s work for them. Though their life was modest they believed in eating well; the best of everything: diamond-bone sirloins, three-shilling tea and the best bottled stout. But Lily seldom made a mistake in the orders so that she got on well with her three mistresses. They were fussy, that was all. But the only thing they would not stand was back answers.# A Headline`
+Output: `Lily, the caretaker’s daughter, did housemaid’s work for them. Though their life was modest they believed in eating well; the best of everything: diamond-bone sirloins, three-shilling tea and the best bottled stout. But Lily seldom made a mistake in the orders so that she got on well with her three mistresses. They were fussy, that was all. But the only thing they would not stand was back answers.
+
+# A Headline
+
+`
+
+

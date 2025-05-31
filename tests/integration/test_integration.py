@@ -575,26 +575,26 @@ class TestErrorRecoveryWorkflows:
         job_id = client.submit_documents([test_file], document_name="DB Recovery Test")
 
         # Simulate database connection issue and recovery
-        original_connection = client.database.connection
+        original_session = client.database.session
 
         try:
             # Temporarily break database connection
-            client.database.connection = None
+            client.database.session = None
 
             # This should handle the database issue gracefully
             with pytest.raises(Exception):  # Should raise appropriate database error
                 client.get_job_details(job_id)
 
             # Restore connection
-            client.database.connection = original_connection
+            client.database.session = original_session
 
             # Should work again
             details = client.get_job_details(job_id)
             assert details["id"] == job_id
 
         finally:
-            # Ensure connection is restored
-            client.database.connection = original_connection
+            # Ensure session is restored
+            client.database.session = original_session
 
     def test_incomplete_workflow_cleanup(self, client, tmp_path):
         """Test cleanup of incomplete or failed workflows."""
