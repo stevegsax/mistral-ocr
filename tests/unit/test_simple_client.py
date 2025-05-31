@@ -201,6 +201,24 @@ class TestSimpleMistralOCRClient:
         
         batch_job = Mock()
         batch_job.status = "completed"
+        # Configure all the attributes that might be accessed by getattr()
+        batch_job.object = "batch"
+        batch_job.input_files = []
+        batch_job.metadata = {}
+        batch_job.endpoint = "/v1/ocr"
+        batch_job.model = "mistral-ocr-latest"
+        batch_job.agent_id = None
+        batch_job.output_file = None
+        batch_job.error_file = None
+        batch_job.errors = []
+        batch_job.total_requests = 1
+        batch_job.completed_requests = 1
+        batch_job.succeeded_requests = 1
+        batch_job.failed_requests = 0
+        batch_job.started_at = None
+        batch_job.completed_at = None
+        batch_job.created_at = None
+        
         mock_client.batch.jobs.get.return_value = batch_job
         
         db_path = str(tmp_path / "test.db")
