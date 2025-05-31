@@ -298,12 +298,26 @@ class ResultManager:
                     FileIOUtils.write_text_file(markdown_file, processed_result.markdown)
 
                 if doc_info and text_file and markdown_file:
+                    # Collect image data as base64 if any images exist
+                    image_data_list = []
+                    for file_obj in processed_result.files:
+                        if file_obj.file_type == ProcessedOCRFileType.IMAGE:
+                            image_data_list.append(file_obj.content)
+                    
+                    # Combine multiple images with separator if needed
+                    combined_image_data = None
+                    if image_data_list:
+                        combined_image_data = ";".join(image_data_list) if len(image_data_list) > 1 else image_data_list[0]
+                    
                     self.database.store_download(
                         text_path=str(text_file),
                         markdown_path=str(markdown_file),
                         document_uuid=doc_info[0],
                         job_id=job_id,
                         document_order=i,
+                        text_content=processed_result.text,
+                        markdown_content=processed_result.markdown,
+                        image_data_base64=combined_image_data,
                     )
 
             self.logger.info(f"Downloaded {len(results)} results to {job_dir}")

@@ -1,7 +1,7 @@
 """Mistral OCR client for API interactions."""
 
 import pathlib
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from mistralai import Mistral
 
@@ -282,3 +282,41 @@ class MistralOCRClient:
         return self.result_manager.download_document_results(
             document_identifier, destination, self.job_manager
         )
+
+    # Database content access methods
+    
+    def get_download_content(self, job_id: str, document_order: int = 0) -> Optional[Dict[str, Optional[str]]]:
+        """Get the actual OCR content for a downloaded result from database.
+        
+        Args:
+            job_id: The job ID to get content for
+            document_order: Order of the result within the document (default: 0)
+            
+        Returns:
+            Dictionary with text_content, markdown_content, and image_data_base64,
+            or None if not found
+        """
+        return self.database.get_download_content(job_id, document_order)
+    
+    def search_ocr_content(self, search_text: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Search all downloaded OCR results by text content.
+        
+        Args:
+            search_text: Text to search for in OCR results
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of dictionaries containing matching download info and content
+        """
+        return self.database.search_downloads_by_text(search_text, limit)
+    
+    def get_all_document_content(self, document_identifier: str) -> List[Dict[str, Any]]:
+        """Get all downloaded content for a document from database.
+        
+        Args:
+            document_identifier: Document name or UUID
+            
+        Returns:
+            List of all downloads with their content for the document
+        """
+        return self.database.get_all_downloads_for_document(document_identifier)

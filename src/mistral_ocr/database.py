@@ -2,7 +2,7 @@
 
 import json
 import pathlib
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -77,6 +77,22 @@ class Database:
             self.session.execute(
                 text("ALTER TABLE documents ADD COLUMN downloaded BOOLEAN DEFAULT FALSE")
             )
+
+        # Add OCR content columns to downloads table if they don't exist
+        downloads_columns = [
+            ("text_content", "TEXT"),
+            ("markdown_content", "TEXT"),
+            ("image_data_base64", "TEXT"),
+        ]
+
+        for column_name, column_type in downloads_columns:
+            try:
+                self.session.execute(text(f"SELECT {column_name} FROM downloads LIMIT 1"))
+            except Exception:
+                # Column doesn't exist, add it
+                self.session.execute(
+                    text(f"ALTER TABLE downloads ADD COLUMN {column_name} {column_type}")
+                )
 
         self.session.commit()
 
@@ -204,8 +220,22 @@ class Database:
         document_uuid: str,
         job_id: str,
         document_order: int,
+        text_content: Optional[str] = None,
+        markdown_content: Optional[str] = None,
+        image_data_base64: Optional[str] = None,
     ) -> None:
-        """Store downloaded file paths."""
+        """Store downloaded file paths and actual OCR content.
+        
+        Args:
+            text_path: Path to text file on disk
+            markdown_path: Path to markdown file on disk
+            document_uuid: Document UUID
+            job_id: Job ID
+            document_order: Order of this result within the document
+            text_content: Actual text content from OCR
+            markdown_content: Actual markdown content from OCR
+            image_data_base64: Base64-encoded image data if applicable
+        """
         if not self.session:
             raise DatabaseConnectionError("Database not connected")
 
@@ -215,6 +245,9 @@ class Database:
             document_uuid=document_uuid,
             job_id=job_id,
             document_order=document_order,
+            text_content=text_content,
+            markdown_content=markdown_content,
+            image_data_base64=image_data_base64,
         )
         self.session.add(download)
         self.session.commit()
@@ -581,6 +614,121 @@ class Database:
         )
 
         return job_details
+
+    def get_download_content(self, job_id: str, document_order: int = 0) -> Optional[Dict[str, Optional[str]]]:
+        """Get the actual OCR content for a downloaded result.
+        
+        Args:
+            job_id: Job ID
+            document_order: Order of the result within the document (default: 0)
+            
+        Returns:
+            Dictionary with text_content, markdown_content, and image_data_base64,
+            or None if not found
+        """
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
+            
+        stmt = select(
+            Download.text_content,
+            Download.markdown_content, 
+            Download.image_data_base64
+        ).where(
+            Download.job_id == job_id,
+            Download.document_order == document_order
+        )
+        
+        result = self.session.execute(stmt).first()
+        if not result:
+            return None
+            
+        return {
+            "text_content": result[0],
+            "markdown_content": result[1], 
+            "image_data_base64": result[2]
+        }
+
+    def search_downloads_by_text(self, search_text: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Search downloaded OCR results by text content.
+        
+        Args:
+            search_text: Text to search for
+            limit: Maximum number of results
+            
+        Returns:
+            List of dictionaries containing download info and matching content
+        """
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
+            
+        stmt = select(
+            Download.job_id,
+            Download.document_order,
+            Download.text_content,
+            Download.markdown_content,
+            Download.created_at,
+            Document.name.label("document_name")
+        ).join(Document).where(
+            Download.text_content.contains(search_text) |
+            Download.markdown_content.contains(search_text)
+        ).limit(limit)
+        
+        results = self.session.execute(stmt).fetchall()
+        
+        return [
+            {
+                "job_id": row[0],
+                "document_order": row[1], 
+                "text_content": row[2],
+                "markdown_content": row[3],
+                "created_at": row[4].isoformat() if row[4] else None,
+                "document_name": row[5]
+            }
+            for row in results
+        ]
+
+    def get_all_downloads_for_document(self, document_identifier: str) -> List[Dict[str, Any]]:
+        """Get all downloaded content for a document by name or UUID.
+        
+        Args:
+            document_identifier: Document name or UUID
+            
+        Returns:
+            List of all downloads with their content
+        """
+        if not self.session:
+            raise DatabaseConnectionError("Database not connected")
+            
+        # Try by UUID first, then by name
+        stmt = select(
+            Download.job_id,
+            Download.document_order,
+            Download.text_content,
+            Download.markdown_content,
+            Download.image_data_base64,
+            Download.text_path,
+            Download.markdown_path,
+            Download.created_at
+        ).join(Document).where(
+            (Document.uuid == document_identifier) |
+            (Document.name == document_identifier)
+        ).order_by(Download.document_order)
+        
+        results = self.session.execute(stmt).fetchall()
+        
+        return [
+            {
+                "job_id": row[0],
+                "document_order": row[1],
+                "text_content": row[2],
+                "markdown_content": row[3],
+                "image_data_base64": row[4],
+                "text_path": row[5],
+                "markdown_path": row[6],
+                "created_at": row[7].isoformat() if row[7] else None
+            }
+            for row in results
+        ]
 
     def close(self) -> None:
         """Close the database connection."""

@@ -79,7 +79,7 @@ class Page(Base):
 
 
 class Download(Base):
-    """Downloaded file record."""
+    """Downloaded file record with actual OCR content."""
 
     __tablename__ = "downloads"
 
@@ -89,6 +89,12 @@ class Download(Base):
     document_order: Mapped[int] = mapped_column(Integer, nullable=False)
     text_path: Mapped[str] = mapped_column(String, nullable=False)
     markdown_path: Mapped[str] = mapped_column(String, nullable=False)
+    
+    # Actual OCR content stored in database
+    text_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    markdown_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    image_data_base64: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.current_timestamp()
     )
