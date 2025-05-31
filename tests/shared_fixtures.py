@@ -1,4 +1,4 @@
-"""Shared test fixtures for Mistral OCR tests."""
+"""Shared test fixtures for simplified Mistral OCR tests."""
 
 import os
 import pathlib
@@ -7,7 +7,7 @@ import subprocess
 import pytest
 from factories import ConfigFactory, FileFactory
 
-from mistral_ocr.client import MistralOCRClient
+from mistral_ocr import SimpleMistralOCRClient
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess:
@@ -15,11 +15,8 @@ def run_cli(*args: str) -> subprocess.CompletedProcess:
     env = {**os.environ, **ConfigFactory.create_test_env_vars()}
 
     # Ensure CLI uses isolated test directories for both data and state
-    # This guarantees database isolation during tests
     if "XDG_DATA_HOME" in os.environ:
         env["XDG_DATA_HOME"] = os.environ["XDG_DATA_HOME"]
-    if "XDG_STATE_HOME" in os.environ:
-        env["XDG_STATE_HOME"] = os.environ["XDG_STATE_HOME"]
 
     return subprocess.run(
         ["python", "-m", "mistral_ocr", *args],
@@ -43,9 +40,10 @@ def create_test_files(
 
 
 @pytest.fixture
-def client(xdg_data_home):
-    """Provide a test MistralOCRClient instance with isolated database."""
-    return MistralOCRClient(api_key="test")
+def client(tmp_path):
+    """Provide a test SimpleMistralOCRClient instance with isolated database."""
+    db_path = str(tmp_path / "test.db")
+    return SimpleMistralOCRClient(api_key="test-api-key", db_path=db_path)
 
 
 @pytest.fixture
@@ -73,18 +71,12 @@ def multiple_test_files(tmp_path):
 
 
 @pytest.fixture
-def large_file_set(tmp_path):
-    """Create a large set of files for batch testing."""
-    return FileFactory.create_large_file_set(tmp_path, count=150)
-
-
-@pytest.fixture
-def xdg_data_home(tmp_path, monkeypatch):
-    """Set XDG_DATA_HOME and XDG_STATE_HOME to tmp_path for testing.
-
-    This ensures both data and state (including database) are isolated to test directories.
-    """
-    paths = ConfigFactory.create_isolated_paths(tmp_path)
-    for key, value in paths.items():
-        monkeypatch.setenv(key, value)
+def isolated_environment(tmp_path, monkeypatch):
+    """Set up isolated test environment with temp directories."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    
+    monkeypatch.setenv("XDG_DATA_HOME", str(data_dir))
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-api-key")
+    
     return tmp_path

@@ -1,67 +1,13 @@
-"""Mistral OCR client library."""
+"""Mistral OCR client library - simplified version."""
 
-from . import constants, data_types
 from ._version import __version__
-from .client import MistralOCRClient
-from .exceptions import (
-    APIConnectionError,
-    APIError,
-    APIResponseError,
-    ConfigurationError,
-    DatabaseConnectionError,
-    DatabaseError,
-    DatabaseOperationError,
-    DocumentCreationError,
-    DocumentError,
-    DocumentNotFoundError,
-    FileHandlingError,
-    InvalidConfigurationError,
-    InvalidJobIdError,
-    JobError,
-    JobNotCompletedError,
-    JobNotFoundError,
-    JobSubmissionError,
-    MissingConfigurationError,
-    MistralOCRError,
-    NoValidFilesError,
-    ResultDownloadError,
-    ResultError,
-    ResultNotAvailableError,
-    UnsupportedFileTypeError,
-)
-from .models import OCRResult
-from .settings import Settings, get_settings
+from .simple_client import SimpleMistralOCRClient
+
+# Backward compatibility alias
+MistralOCRClient = SimpleMistralOCRClient
 
 __all__ = [
+    "SimpleMistralOCRClient",
     "MistralOCRClient",
-    "OCRResult",
     "__version__",
-    "Settings",
-    "get_settings",
-    "types",
-    "constants",
-    "MistralOCRError",
-    "DatabaseError",
-    "DatabaseConnectionError",
-    "DatabaseOperationError",
-    "FileHandlingError",
-    "UnsupportedFileTypeError",
-    "NoValidFilesError",
-    "JobError",
-    "JobNotFoundError",
-    "InvalidJobIdError",
-    "JobNotCompletedError",
-    "JobSubmissionError",
-    "APIError",
-    "APIConnectionError",
-    "APIResponseError",
-    "ConfigurationError",
-    "InvalidConfigurationError",
-    "MissingConfigurationError",
-    "DocumentError",
-    "DocumentNotFoundError",
-    "DocumentCreationError",
-    "ResultError",
-    "ResultNotAvailableError",
-    "ResultDownloadError",
 ]

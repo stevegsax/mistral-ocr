@@ -25,20 +25,20 @@ def run_cli(*args: str) -> subprocess.CompletedProcess:
 
 
 @pytest.mark.unit
-class TestCLISubcommands:
-    """Tests for CLI subcommand structure and help functionality."""
+class TestSimplifiedCLISubcommands:
+    """Tests for simplified CLI subcommand structure and help functionality."""
 
     def test_main_help_shows_subcommands(self) -> None:
         """Test that main help shows available subcommands."""
         result = run_cli("--help")
         assert result.returncode == 0
 
-        # Check for main subcommands
+        # Check for simplified subcommands
         assert "submit" in result.stdout
-        assert "jobs" in result.stdout
+        assert "status" in result.stdout
         assert "results" in result.stdout
-        assert "documents" in result.stdout
-        assert "config" in result.stdout
+        assert "search" in result.stdout
+        assert "list" in result.stdout
 
     def test_submit_subcommand_help(self) -> None:
         """Test submit subcommand help."""
@@ -46,25 +46,13 @@ class TestCLISubcommands:
         assert result.returncode == 0
 
         # Check for submit-specific options
-        assert "path" in result.stdout.lower()
-        assert "--recursive" in result.stdout
+        assert "files" in result.stdout.lower()
         assert "--name" in result.stdout
-        assert "--uuid" in result.stdout
-        assert "--model" in result.stdout
+        assert "--recursive" in result.stdout
 
-    def test_jobs_subcommand_help(self) -> None:
-        """Test jobs subcommand help."""
-        result = run_cli("jobs", "--help")
-        assert result.returncode == 0
-
-        # Check for jobs sub-subcommands
-        assert "list" in result.stdout
-        assert "status" in result.stdout
-        assert "cancel" in result.stdout
-
-    def test_jobs_status_subcommand_help(self) -> None:
-        """Test jobs status subcommand help."""
-        result = run_cli("jobs", "status", "--help")
+    def test_status_subcommand_help(self) -> None:
+        """Test status subcommand help."""
+        result = run_cli("status", "--help")
         assert result.returncode == 0
 
         # Check for job_id parameter
@@ -75,133 +63,64 @@ class TestCLISubcommands:
         result = run_cli("results", "--help")
         assert result.returncode == 0
 
-        # Check for results sub-subcommands
-        assert "get" in result.stdout
-        assert "download" in result.stdout
-
-    def test_results_download_subcommand_help(self) -> None:
-        """Test results download subcommand help."""
-        result = run_cli("results", "download", "--help")
-        assert result.returncode == 0
-
-        # Check for job_id parameter and output option
+        # Check for job_id parameter and format option
         assert "job_id" in result.stdout.lower()
-        assert "--output" in result.stdout
+        assert "--format" in result.stdout
 
-    def test_documents_subcommand_help(self) -> None:
-        """Test documents subcommand help."""
-        result = run_cli("documents", "--help")
+    def test_search_subcommand_help(self) -> None:
+        """Test search subcommand help."""
+        result = run_cli("search", "--help")
         assert result.returncode == 0
 
-        # Check for documents sub-subcommands
-        assert "query" in result.stdout
-        assert "download" in result.stdout
+        # Check for query parameter
+        assert "query" in result.stdout.lower()
 
-    def test_config_subcommand_help(self) -> None:
-        """Test config subcommand help."""
-        result = run_cli("config", "--help")
+    def test_list_subcommand_help(self) -> None:
+        """Test list subcommand help."""
+        result = run_cli("list", "--help")
         assert result.returncode == 0
 
-        # Check for config sub-subcommands
-        assert "show" in result.stdout
-        assert "reset" in result.stdout
-        assert "set" in result.stdout
-
-    def test_config_set_subcommand_help(self) -> None:
-        """Test config set subcommand help."""
-        result = run_cli("config", "set", "--help")
-        assert result.returncode == 0
-
-        # Check for configuration keys
-        assert "api-key" in result.stdout
-        assert "model" in result.stdout
-        assert "download-dir" in result.stdout
+        # Should show help for listing jobs
+        assert "List all jobs" in result.stdout or "list" in result.stdout.lower()
 
     def test_invalid_subcommand_shows_help(self) -> None:
         """Test that invalid subcommands show appropriate help."""
         result = run_cli("invalid-command")
         assert result.returncode != 0
-        # Should show main help or error about invalid choice
-
-    def test_subcommand_without_action_shows_help(self) -> None:
-        """Test that subcommands without actions show their help."""
-        # Test jobs without action
-        result = run_cli("jobs")
-        assert result.returncode != 0 or "usage" in result.stdout.lower()
-
-        # Test results without action
-        result = run_cli("results")
-        assert result.returncode != 0 or "usage" in result.stdout.lower()
-
-        # Test documents without action
-        result = run_cli("documents")
-        assert result.returncode != 0 or "usage" in result.stdout.lower()
-
-        # Test config without action
-        result = run_cli("config")
-        assert result.returncode != 0 or "usage" in result.stdout.lower()
+        # Should show error about invalid choice
 
 
 @pytest.mark.unit
-class TestCLIArgumentValidation:
-    """Tests for CLI argument validation with new subcommand structure."""
+class TestSimplifiedCLIArgumentValidation:
+    """Tests for simplified CLI argument validation."""
 
-    def test_submit_requires_path(self) -> None:
-        """Test that submit subcommand requires a path argument."""
+    def test_submit_requires_files(self) -> None:
+        """Test that submit subcommand requires files argument."""
         result = run_cli("submit")
         assert result.returncode != 0
         assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
 
-    def test_jobs_status_requires_job_id(self) -> None:
-        """Test that jobs status requires job_id argument."""
-        result = run_cli("jobs", "status")
+    def test_status_requires_job_id(self) -> None:
+        """Test that status requires job_id argument."""
+        result = run_cli("status")
         assert result.returncode != 0
         assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
 
-    def test_jobs_cancel_requires_job_id(self) -> None:
-        """Test that jobs cancel requires job_id argument."""
-        result = run_cli("jobs", "cancel")
+    def test_results_requires_job_id(self) -> None:
+        """Test that results requires job_id argument."""
+        result = run_cli("results")
         assert result.returncode != 0
         assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
 
-    def test_results_get_requires_job_id(self) -> None:
-        """Test that results get requires job_id argument."""
-        result = run_cli("results", "get")
+    def test_search_requires_query(self) -> None:
+        """Test that search requires query argument."""
+        result = run_cli("search")
         assert result.returncode != 0
         assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
 
-    def test_results_download_requires_job_id(self) -> None:
-        """Test that results download requires job_id argument."""
-        result = run_cli("results", "download")
-        assert result.returncode != 0
-        assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
-
-    def test_documents_query_requires_name_or_uuid(self) -> None:
-        """Test that documents query requires name_or_uuid argument."""
-        result = run_cli("documents", "query")
-        assert result.returncode != 0
-        assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
-
-    def test_documents_download_requires_name_or_uuid(self) -> None:
-        """Test that documents download requires name_or_uuid argument."""
-        result = run_cli("documents", "download")
-        assert result.returncode != 0
-        assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
-
-    def test_config_set_requires_key_and_value(self) -> None:
-        """Test that config set requires both key and value arguments."""
-        # Test missing both arguments
-        result = run_cli("config", "set")
-        assert result.returncode != 0
-        assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
-
-        # Test missing value argument
-        result = run_cli("config", "set", "api-key")
-        assert result.returncode != 0
-        assert "required" in result.stderr.lower() or "usage" in result.stderr.lower()
-
-    def test_config_set_validates_key_choices(self) -> None:
-        """Test that config set validates key choices."""
-        result = run_cli("config", "set", "invalid-key", "some-value")
-        assert result.returncode != 0
-        assert "invalid choice" in result.stderr.lower() or "usage" in result.stderr.lower()
+    def test_list_runs_without_arguments(self) -> None:
+        """Test that list command runs without arguments."""
+        result = run_cli("list")
+        # This should work (though may fail due to no API key, but shouldn't be argument error)
+        # Either success or error about API/database, not argument error
+        assert "required" not in result.stderr.lower() or result.returncode == 0

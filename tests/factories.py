@@ -9,26 +9,20 @@ from unittest.mock import Mock
 
 @dataclass
 class TestJobData:
-    """Test job data factory."""
+    """Test job data factory for simplified architecture."""
 
-    id: str
+    job_id: str
     status: str
-    document_uuid: str
     document_name: str
-    file_count: int
     created_at: str = "2024-01-01T10:00:00Z"
-    completed_at: str = None
-    last_api_refresh: str = None
-    api_response_json: str = None
 
 
 @dataclass
 class TestDocumentData:
     """Test document data factory."""
 
-    uuid: str
     name: str
-    downloaded: bool = False
+    id: int = 1
 
 
 class JobFactory:
@@ -38,49 +32,27 @@ class JobFactory:
     def create_pending_job(job_id: str = None, doc_name: str = "Test Document") -> TestJobData:
         """Create a pending job."""
         return TestJobData(
-            id=job_id or f"job_{uuid.uuid4().hex[:8]}",
+            job_id=job_id or f"job_{uuid.uuid4().hex[:8]}",
             status="pending",
-            document_uuid=str(uuid.uuid4()),
             document_name=doc_name,
-            file_count=1,
         )
 
     @staticmethod
     def create_completed_job(job_id: str = None, doc_name: str = "Test Document") -> TestJobData:
         """Create a completed job."""
         return TestJobData(
-            id=job_id or f"job_{uuid.uuid4().hex[:8]}",
+            job_id=job_id or f"job_{uuid.uuid4().hex[:8]}",
             status="completed",
-            document_uuid=str(uuid.uuid4()),
             document_name=doc_name,
-            file_count=1,
-            completed_at="2024-01-01T10:05:00Z",
         )
 
     @staticmethod
     def create_failed_job(job_id: str = None, doc_name: str = "Test Document") -> TestJobData:
         """Create a failed job."""
         return TestJobData(
-            id=job_id or f"job_{uuid.uuid4().hex[:8]}",
+            job_id=job_id or f"job_{uuid.uuid4().hex[:8]}",
             status="failed",
-            document_uuid=str(uuid.uuid4()),
             document_name=doc_name,
-            file_count=1,
-            completed_at="2024-01-01T10:03:00Z",
-        )
-
-    @staticmethod
-    def create_production_job(
-        job_id: str = None, doc_name: str = "Production Document"
-    ) -> TestJobData:
-        """Create a realistic production job with UUID-like ID."""
-        return TestJobData(
-            id=job_id or str(uuid.uuid4()),
-            status="completed",
-            document_uuid=str(uuid.uuid4()),
-            document_name=doc_name,
-            file_count=3,
-            completed_at="2024-01-01T10:05:00Z",
         )
 
 
@@ -88,9 +60,9 @@ class DocumentFactory:
     """Factory for creating test document objects."""
 
     @staticmethod
-    def create_document(name: str = "Test Document", downloaded: bool = False) -> TestDocumentData:
+    def create_document(name: str = "Test Document", doc_id: int = 1) -> TestDocumentData:
         """Create a test document."""
-        return TestDocumentData(uuid=str(uuid.uuid4()), name=name, downloaded=downloaded)
+        return TestDocumentData(name=name, id=doc_id)
 
 
 class MockAPIFactory:
