@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": "58d9cb7e-a767-4c2a-aa37-4f229518d12f",
+      "object": "batch",
+      "input_files": [
+        "ecd20092-f035-4a54-8056-c3cd084c0f07"
+      ],
+      "metadata": null,
+      "endpoint": "/v1/chat/completions",
+      "model": "mistral-large-latest",
+      "agent_id": null,
+      "output_file": null,
+      "error_file": "1e9f10c2-d04e-4e2b-942b-f19c4471c8dd",
+      "errors": [
+        {
+          "message": "Internal error",
+          "count": 1
+        }
+      ],
+      "status": "SUCCESS",
+      "created_at": 1748658893,
+      "total_requests": 1,
+      "completed_requests": 1,
+      "succeeded_requests": 0,
+      "failed_requests": 1,
+      "started_at": 1748658893,
+      "completed_at": 1748658894
+    }
+  ]
+}
