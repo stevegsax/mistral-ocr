@@ -303,6 +303,73 @@ def list_command(args: Any) -> int:
         return 1
 
 
+def files_command(args: Any) -> int:
+    """List files with details."""
+    client = SimpleMistralOCRClient()
+    
+    try:
+        # Refresh files from API
+        client._refresh_files_list()
+        
+        # Get files from database
+        files = client.db.list_files()
+        
+        if not files:
+            print("No files found")
+            return 0
+        
+        print(f"Found {len(files)} files:\n")
+        
+        for file in files:
+            # File status emoji
+            status_emoji = {
+                'processed': '✅',
+                'error': '❌',
+                'processing': '🔄',
+                'uploaded': '📁'
+            }.get(file.get('status', ''), '📄')
+            
+            print(f"{status_emoji} {file['file_id']}")
+            
+            if file.get('filename'):
+                print(f"   📁 Filename: {file['filename']}")
+            
+            if file.get('purpose'):
+                print(f"   🎯 Purpose: {file['purpose']}")
+            
+            if file.get('bytes'):
+                # Convert bytes to human readable format
+                size = file['bytes']
+                if size < 1024:
+                    size_str = f"{size} B"
+                elif size < 1024 * 1024:
+                    size_str = f"{size/1024:.1f} KB"
+                elif size < 1024 * 1024 * 1024:
+                    size_str = f"{size/(1024*1024):.1f} MB"
+                else:
+                    size_str = f"{size/(1024*1024*1024):.1f} GB"
+                print(f"   📊 Size: {size_str}")
+            
+            if file.get('status'):
+                print(f"   📋 Status: {file['status']}")
+            
+            if file.get('created_at_api'):
+                print(f"   ⏰ Created: {file['created_at_api']}")
+            
+            if file.get('source'):
+                print(f"   🔗 Source: {file['source']}")
+            
+            if file.get('num_lines'):
+                print(f"   📄 Lines: {file['num_lines']}")
+            
+            print()  # Empty line between files
+        
+        return 0
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
+
+
 def main() -> int:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -317,6 +384,7 @@ Examples:
   mistral-ocr results job_abc123 --format text
   mistral-ocr search "invoice total"
   mistral-ocr list
+  mistral-ocr files
         """
     )
     
@@ -351,6 +419,10 @@ Examples:
     # List command
     list_parser = subparsers.add_parser('list', help='List all jobs')
     list_parser.set_defaults(func=list_command)
+    
+    # Files command
+    files_parser = subparsers.add_parser('files', help='List all files')
+    files_parser.set_defaults(func=files_command)
     
     args = parser.parse_args()
     

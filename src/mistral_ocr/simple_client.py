@@ -78,6 +78,22 @@ class OCRDatabase:
                 downloaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (job_id) REFERENCES jobs(job_id)
             );
+            
+            CREATE TABLE IF NOT EXISTS files (
+                id INTEGER PRIMARY KEY,
+                file_id TEXT UNIQUE,
+                filename TEXT,
+                purpose TEXT,
+                bytes INTEGER,
+                created_at_api INTEGER,  -- API timestamp
+                status TEXT,
+                status_details TEXT,
+                sample_type TEXT,
+                num_lines INTEGER,
+                source TEXT,
+                object_type TEXT,
+                refreshed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
         """)
         self.connection.commit()
         
@@ -278,6 +294,48 @@ class OCRDatabase:
         ).fetchone()
         return row[0] if row else None
     
+    def add_file(self, file_info: Dict) -> None:
+        """Add or update file information."""
+        self.connection.execute("""
+            INSERT OR REPLACE INTO files (
+                file_id, filename, purpose, bytes, created_at_api, status, 
+                status_details, sample_type, num_lines, source, object_type, refreshed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (
+            file_info.get('id'),
+            file_info.get('filename'),
+            file_info.get('purpose'),
+            file_info.get('bytes'),
+            file_info.get('created_at'),
+            file_info.get('status'),
+            file_info.get('status_details'),
+            file_info.get('sample_type'),
+            file_info.get('num_lines'),
+            file_info.get('source'),
+            file_info.get('object', 'file')
+        ))
+        self.connection.commit()
+    
+    def get_file(self, file_id: str) -> Optional[Dict]:
+        """Get file information by ID."""
+        row = self.connection.execute(
+            "SELECT * FROM files WHERE file_id = ?", (file_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    
+    def list_files(self, purpose: Optional[str] = None) -> List[Dict]:
+        """List all files, optionally filtered by purpose."""
+        if purpose:
+            rows = self.connection.execute(
+                "SELECT * FROM files WHERE purpose = ? ORDER BY created_at_api DESC",
+                (purpose,)
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                "SELECT * FROM files ORDER BY created_at_api DESC"
+            ).fetchall()
+        return [dict(row) for row in rows]
+    
     def get_job(self, job_id: str) -> Optional[Dict]:
         """Get a specific job by ID with document name."""
         row = self.connection.execute(
@@ -366,6 +424,9 @@ class SimpleMistralOCRClient:
     def status(self, job_id: str) -> str:
         """Check job status and update database with full API response."""
         try:
+            # Refresh file list from API  
+            self._refresh_files_list()
+            
             # Get status from Mistral API
             batch_job = self.client.batch.jobs.get(job_id=job_id)
             status = batch_job.status
@@ -483,6 +544,9 @@ class SimpleMistralOCRClient:
         
         if refresh_from_api:
             try:
+                # Refresh file list from API
+                self._refresh_files_list()
+                
                 # Fetch all jobs from Mistral API
                 api_jobs = self.client.batch.jobs.list()
                 
@@ -604,6 +668,36 @@ class SimpleMistralOCRClient:
         # Download error file if present
         if job_dict.get('error_file'):
             self._download_error_file(job_dict['error_file'], job_id)
+    
+    def _refresh_files_list(self) -> None:
+        """Fetch and store file list from Mistral API."""
+        try:
+            # Get file list from Mistral API
+            files_response = self.client.files.list()
+            
+            # Store each file in database
+            for file_obj in files_response.data:
+                # Convert file object to dict
+                file_info = {
+                    'id': getattr(file_obj, 'id', None),
+                    'filename': getattr(file_obj, 'filename', None),
+                    'purpose': getattr(file_obj, 'purpose', None),
+                    'bytes': getattr(file_obj, 'bytes', None),
+                    'created_at': getattr(file_obj, 'created_at', None),
+                    'status': getattr(file_obj, 'status', None),
+                    'status_details': getattr(file_obj, 'status_details', None),
+                    'sample_type': getattr(file_obj, 'sample_type', None),
+                    'num_lines': getattr(file_obj, 'num_lines', None),
+                    'source': getattr(file_obj, 'source', None),
+                    'object': getattr(file_obj, 'object', 'file')
+                }
+                
+                self.db.add_file(file_info)
+            
+            print(f"Refreshed {len(files_response.data)} files from Mistral API")
+            
+        except Exception as e:
+            print(f"Warning: Could not refresh files list from API: {e}")
     
     def _create_batch_file(self, file_paths: List[pathlib.Path]) -> str:
         """Create JSONL batch file for Mistral API."""
